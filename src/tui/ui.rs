@@ -23,6 +23,10 @@ pub fn draw(f: &mut Frame, app: &App) {
             draw_main_view(f, app);
             draw_edit_task_dialog(f, app);
         }
+        AppMode::DeleteConfirm => {
+            draw_main_view(f, app);
+            draw_delete_confirm_dialog(f, app);
+        }
         _ => {
             draw_main_view(f, app);
         }
@@ -220,8 +224,8 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(vec![
                 Span::styled("Notes:", Style::default().add_modifier(Modifier::BOLD)),
             ]));
-            for (i, note) in task.notes.iter().enumerate() {
-                lines.push(Line::from(format!("  {}. {}", i + 1, note)));
+            for line in task.notes.lines() {
+                lines.push(Line::from(format!("  {}", line)));
             }
         }
 
@@ -331,12 +335,13 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let help_text = match app.mode {
         AppMode::Normal => {
-            "j/k:↓↑ | Tab/Enter:Expand | s:Start | c:Complete | x:Cancel | p:Pause | a:Add | e:Edit | h:Toggle Completed | ?:Help | q:Quit"
+            "j/k:↓↑ | Tab/Enter:Expand | s:Start | c:Complete | x:Cancel | p:Pause | a:Add subtask | A:Add top-level | e:Edit | d:Delete | h:Toggle Completed | ?:Help | q:Quit"
         }
         AppMode::Help => "Press ? or ESC to close help",
         AppMode::Filter => "ESC:Cancel",
-        AppMode::AddTask => "↑/↓:Navigate | Enter:New line (in note) | Ctrl+Enter:Save | ESC:Cancel",
-        AppMode::EditTask => "↑/↓:Navigate | Enter:New line (in note) | Ctrl+Enter:Save | ESC:Cancel",
+        AppMode::AddTask => "↑/↓/Tab:Navigate | Enter:Activate button or new line | Ctrl+Enter:Save | ESC:Cancel",
+        AppMode::EditTask => "↑/↓/Tab:Navigate | Enter:Activate button or new line | Ctrl+Enter:Save | ESC:Cancel",
+        AppMode::DeleteConfirm => "Enter/y:Confirm Delete | ESC/n:Cancel",
     };
 
     let footer = Paragraph::new(help_text)
@@ -363,8 +368,10 @@ fn draw_help(f: &mut Frame) {
         Line::from(vec![
             Span::styled("Task Management", Style::default().add_modifier(Modifier::BOLD)),
         ]),
-        Line::from("  a - Add new task (as subtask of selected)"),
-        Line::from("  e - Edit selected task"),
+        Line::from("  a       - Add new task (as subtask of selected)"),
+        Line::from("  A       - Add new task (as top-level, not a subtask)"),
+        Line::from("  e       - Edit selected task"),
+        Line::from("  d       - Delete selected task (with confirmation)"),
         Line::from("  s - Start task (begins time tracking)"),
         Line::from("  c - Complete task (stops time tracking)"),
         Line::from("  x - Cancel task"),
@@ -432,6 +439,79 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
+fn draw_delete_confirm_dialog(f: &mut Frame, app: &App) {
+    if let Some(task_id) = app.editing_task_id {
+        if let Some(task) = app.get_task_by_id(task_id) {
+            let area = centered_rect(60, 30, f.area());
+            
+            // Clear background
+            f.render_widget(ratatui::widgets::Clear, area);
+            
+            let children = app.storage.get_children(task_id);
+            let has_subtasks = !children.is_empty();
+            
+            let warning_text = if has_subtasks {
+                format!(
+                    "Delete task \"{}\"?\n\n⚠ WARNING: This task has {} subtask(s)!\nDeleting it will NOT delete the subtasks,\nbut they will become orphaned.\n\nAre you sure?",
+                    task.title,
+                    children.len()
+                )
+            } else {
+                format!("Delete task \"{}\"?\n\nThis action cannot be undone.", task.title)
+            };
+            
+            let warning_style = if has_subtasks {
+                Style::default().fg(Color::Red)
+            } else {
+                Style::default().fg(Color::Yellow)
+            };
+            
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(2)
+                .constraints([
+                    Constraint::Min(5),     // Warning text
+                    Constraint::Length(3),  // Buttons
+                ])
+                .split(area);
+            
+            let block = Block::default()
+                .title("Confirm Delete")
+                .borders(Borders::ALL)
+                .style(Style::default().bg(Color::Black));
+            f.render_widget(block, area);
+            
+            let warning = Paragraph::new(warning_text)
+                .style(warning_style)
+                .wrap(Wrap { trim: true })
+                .alignment(ratatui::layout::Alignment::Center);
+            f.render_widget(warning, chunks[0]);
+            
+            // Buttons
+            let button_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(50),
+                    Constraint::Percentage(50),
+                ])
+                .split(chunks[1]);
+            
+            let delete_button = Paragraph::new("[ Delete ] (Enter/y)")
+                .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                .alignment(ratatui::layout::Alignment::Center)
+                .block(Block::default().borders(Borders::ALL));
+            
+            let cancel_button = Paragraph::new("[ Cancel ] (ESC/n)")
+                .style(Style::default().fg(Color::Green))
+                .alignment(ratatui::layout::Alignment::Center)
+                .block(Block::default().borders(Borders::ALL));
+            
+            f.render_widget(delete_button, button_chunks[0]);
+            f.render_widget(cancel_button, button_chunks[1]);
+        }
+    }
+}
+
 fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(80, 75, f.area());
     
@@ -489,9 +569,9 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     };
 
     let note_text = if app.input_state.note.is_empty() {
-        "Add Note (multiline - press Enter for new line):".to_string()
+        "Notes (multiline - press Enter for new line):".to_string()
     } else {
-        format!("Add Note (multiline):\n{}", app.input_state.note)
+        format!("Notes:\n{}", app.input_state.note)
     };
 
     let note_input = Paragraph::new(note_text)
@@ -510,13 +590,31 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         ])
         .split(chunks[6]);
 
-    let save_button = Paragraph::new("[ Save ] (Ctrl+Enter)")
-        .style(Style::default().fg(Color::Green))
+    let save_style = if app.input_state.current_field == 6 {
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Green)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Green)
+    };
+
+    let cancel_style = if app.input_state.current_field == 7 {
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Red)
+    };
+
+    let save_button = Paragraph::new("[ Save ]")
+        .style(save_style)
         .alignment(ratatui::layout::Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     
-    let cancel_button = Paragraph::new("[ Cancel ] (ESC)")
-        .style(Style::default().fg(Color::Red))
+    let cancel_button = Paragraph::new("[ Cancel ]")
+        .style(cancel_style)
         .alignment(ratatui::layout::Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
 
@@ -524,7 +622,12 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     f.render_widget(cancel_button, button_chunks[1]);
 
     // Help text
-    let help = Paragraph::new("↑/↓:Navigate | Enter:New line in note | Ctrl+Enter:Save | ESC:Cancel")
+    let parent_info = if app.editing_task_id.is_some() {
+        "Will be added as subtask of selected task"
+    } else {
+        "Will be added as top-level task"
+    };
+    let help = Paragraph::new(format!("↑/↓/Tab:Navigate | Enter:Select button or new line | Ctrl+Enter:Save | ESC:Cancel\n{}", parent_info))
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[7]);
 }
@@ -586,9 +689,9 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
     };
 
     let note_text = if app.input_state.note.is_empty() {
-        "Add Note (multiline - press Enter for new line):".to_string()
+        "Notes (multiline - press Enter for new line):".to_string()
     } else {
-        format!("Add Note (multiline):\n{}", app.input_state.note)
+        format!("Notes:\n{}", app.input_state.note)
     };
 
     let note_input = Paragraph::new(note_text)
@@ -607,13 +710,31 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         ])
         .split(chunks[6]);
 
-    let save_button = Paragraph::new("[ Save ] (Ctrl+Enter)")
-        .style(Style::default().fg(Color::Green))
+    let save_style = if app.input_state.current_field == 6 {
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Green)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Green)
+    };
+
+    let cancel_style = if app.input_state.current_field == 7 {
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Red)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Red)
+    };
+
+    let save_button = Paragraph::new("[ Save ]")
+        .style(save_style)
         .alignment(ratatui::layout::Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
     
-    let cancel_button = Paragraph::new("[ Cancel ] (ESC)")
-        .style(Style::default().fg(Color::Red))
+    let cancel_button = Paragraph::new("[ Cancel ]")
+        .style(cancel_style)
         .alignment(ratatui::layout::Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
 
@@ -621,7 +742,7 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
     f.render_widget(cancel_button, button_chunks[1]);
 
     // Help text
-    let help = Paragraph::new("↑/↓:Navigate | Enter:New line in note | Ctrl+Enter:Save | ESC:Cancel")
+    let help = Paragraph::new("↑/↓/Tab:Navigate | Enter:Select button or new line (in note) | Ctrl+Enter:Save | ESC:Cancel")
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[7]);
 }

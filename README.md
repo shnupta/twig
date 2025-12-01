@@ -192,8 +192,10 @@ Launch with `twig` or `twig tui`.
 - `Enter` / `Space` / `Tab` - Expand/collapse task (shows/hides subtasks)
 
 **Task Management:**
-- `a` - Add new task (will be subtask of selected task)
+- `a` - Add new task (as subtask of selected task)
+- `A` (Shift+a) - Add new task (as top-level task, not a subtask)
 - `e` - Edit selected task (title, description, tags, estimate, assignee)
+- `d` - Delete selected task (shows confirmation dialog)
 - `s` - Start selected task (begins time tracking)
 - `c` - Complete selected task (stops time tracking)
 - `x` - Cancel selected task
@@ -223,7 +225,7 @@ When adding or editing tasks in the TUI, you can:
 - Add **tags** (comma-separated) for organization
 - Set **estimate** (1h, 2d, 3w, 2m format)
 - Assign to a **team member**
-- Add a **note** (notes are appended, multiple notes per task)
+- Edit **notes** (multiline text field for detailed task notes)
 
 ### Tree View Indicators
 

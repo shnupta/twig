@@ -16,6 +16,7 @@ pub enum AppMode {
     Help,
     AddTask,
     EditTask,
+    DeleteConfirm,
 }
 
 pub struct InputState {
@@ -212,7 +213,7 @@ impl App {
         self.rebuild_visible_task_list();
     }
 
-    pub fn start_add_task(&mut self) {
+    pub fn start_add_task(&mut self, as_subtask: bool) {
         self.input_state = InputState {
             title: String::new(),
             description: String::new(),
@@ -221,6 +222,12 @@ impl App {
             assignee: String::new(),
             note: String::new(),
             current_field: 0,
+        };
+        // Store whether this should be a subtask or top-level
+        self.editing_task_id = if as_subtask {
+            self.get_selected_task().map(|t| t.id)
+        } else {
+            None
         };
         self.mode = AppMode::AddTask;
     }
@@ -233,6 +240,7 @@ impl App {
             let tags = task.tags.join(", ");
             let estimate = task.get_formatted_estimate().unwrap_or_default();
             let assignee = task.assigned_to.clone().unwrap_or_default();
+            let notes = task.notes.clone();
             
             self.editing_task_id = Some(task_id);
             self.input_state = InputState {
@@ -241,7 +249,7 @@ impl App {
                 tags,
                 estimate,
                 assignee,
-                note: String::new(),
+                note: notes,
                 current_field: 0,
             };
             self.mode = AppMode::EditTask;
@@ -264,17 +272,16 @@ impl App {
             task.assigned_to = Some(self.input_state.assignee.clone());
         }
         
-        if !self.input_state.note.is_empty() {
-            task.add_note(self.input_state.note.clone());
-        }
+        task.notes = self.input_state.note.clone();
         
-        // Set parent to selected task if one is selected
-        if let Some(selected) = self.get_selected_task() {
-            task.parent_id = Some(selected.id);
+        // Set parent based on editing_task_id (which stores the parent for new tasks)
+        if let Some(parent_id) = self.editing_task_id {
+            task.parent_id = Some(parent_id);
         }
         
         self.storage.add_task(task)?;
         self.rebuild_visible_task_list();
+        self.editing_task_id = None;
         self.mode = AppMode::Normal;
         Ok(())
     }
@@ -303,9 +310,7 @@ impl App {
                     task.assigned_to = None;
                 }
                 
-                if !self.input_state.note.is_empty() {
-                    task.add_note(self.input_state.note.clone());
-                }
+                task.notes = self.input_state.note.clone();
                 
                 self.storage.save()?;
             }
@@ -318,6 +323,31 @@ impl App {
     pub fn cancel_input(&mut self) {
         self.editing_task_id = None;
         self.mode = AppMode::Normal;
+    }
+
+    pub fn start_delete_task(&mut self) {
+        if let Some(task) = self.get_selected_task() {
+            self.editing_task_id = Some(task.id);
+            self.mode = AppMode::DeleteConfirm;
+        }
+    }
+
+    pub fn confirm_delete_task(&mut self) -> Result<()> {
+        if let Some(task_id) = self.editing_task_id {
+            self.storage.delete_task(task_id)?;
+            self.rebuild_visible_task_list();
+            // Adjust selection if needed
+            if self.selected_index >= self.visible_task_list.len() && self.selected_index > 0 {
+                self.selected_index -= 1;
+            }
+        }
+        self.editing_task_id = None;
+        self.mode = AppMode::Normal;
+        Ok(())
+    }
+
+    pub fn get_task_by_id(&self, id: uuid::Uuid) -> Option<&Task> {
+        self.storage.get_task(id)
     }
 
     pub fn start_selected_task(&mut self) -> Result<()> {
@@ -399,7 +429,7 @@ impl App {
     }
 
     pub fn next_field(&mut self) {
-        self.input_state.current_field = (self.input_state.current_field + 1).min(5);
+        self.input_state.current_field = (self.input_state.current_field + 1).min(7);
     }
 
     pub fn prev_field(&mut self) {
@@ -489,10 +519,16 @@ fn run_app<B: ratatui::backend::Backend>(
                             app.toggle_expand();
                         }
                         KeyCode::Char('a') => {
-                            app.start_add_task();
+                            app.start_add_task(true); // Add as subtask
+                        }
+                        KeyCode::Char('A') => {
+                            app.start_add_task(false); // Add as top-level task
                         }
                         KeyCode::Char('e') => {
                             app.start_edit_task();
+                        }
+                        KeyCode::Char('d') => {
+                            app.start_delete_task();
                         }
                         _ => {}
                     }
@@ -505,6 +541,17 @@ fn run_app<B: ratatui::backend::Backend>(
                 AppMode::Filter => {
                     if key.code == KeyCode::Esc {
                         app.mode = AppMode::Normal;
+                    }
+                }
+                AppMode::DeleteConfirm => {
+                    match key.code {
+                        KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                            let _ = app.confirm_delete_task();
+                        }
+                        KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                            app.cancel_input();
+                        }
+                        _ => {}
                     }
                 }
                 AppMode::AddTask | AppMode::EditTask => {
@@ -531,16 +578,26 @@ fn run_app<B: ratatui::backend::Backend>(
                             app.prev_field();
                         }
                         KeyCode::Enter => {
-                            // If in note field (field 5), insert newline
-                            if app.input_state.current_field == 5 {
-                                app.input_char('\n');
-                            } else if key.modifiers.contains(KeyModifiers::CONTROL) {
-                                // Ctrl+Enter saves from any field
+                            // Check for Ctrl+Enter first (save from any field)
+                            if key.modifiers.contains(KeyModifiers::CONTROL) {
                                 if matches!(app.mode, AppMode::AddTask) {
                                     let _ = app.save_new_task();
                                 } else {
                                     let _ = app.save_edit_task();
                                 }
+                            } else if app.input_state.current_field == 6 {
+                                // Save button selected
+                                if matches!(app.mode, AppMode::AddTask) {
+                                    let _ = app.save_new_task();
+                                } else {
+                                    let _ = app.save_edit_task();
+                                }
+                            } else if app.input_state.current_field == 7 {
+                                // Cancel button selected
+                                app.cancel_input();
+                            } else if app.input_state.current_field == 5 {
+                                // Regular Enter in note field inserts newline
+                                app.input_char('\n');
                             }
                         }
                         _ => {}

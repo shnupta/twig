@@ -123,14 +123,29 @@ pub fn format_date(dt: &DateTime<Utc>) -> String {
 }
 
 pub fn format_duration_human(seconds: i64) -> String {
-    let hours = seconds as f64 / 3600.0;
-    if hours < 1.0 {
-        format!("{}m", seconds / 60)
-    } else if hours < 8.0 {
-        format!("{:.1}h", hours)
-    } else {
-        let days = hours / 8.0;
-        format!("{:.1}d", days)
+    if seconds < 60 {
+        return format!("{}s", seconds);
     }
+    
+    let minutes = seconds / 60;
+    let hours = minutes / 60;
+    let days = hours / 8; // 8-hour work days
+    
+    let remaining_hours = hours % 8;
+    let remaining_minutes = minutes % 60;
+    
+    let mut parts = Vec::new();
+    
+    if days > 0 {
+        parts.push(format!("{}d", days));
+    }
+    if remaining_hours > 0 || days > 0 {
+        parts.push(format!("{}h", remaining_hours));
+    }
+    if remaining_minutes > 0 || parts.is_empty() {
+        parts.push(format!("{}m", remaining_minutes));
+    }
+    
+    parts.join(" ")
 }
 

@@ -113,7 +113,7 @@ pub struct Task {
     pub time_entries: Vec<TimeEntry>,
     pub total_time_seconds: i64,
     #[serde(default)]
-    pub notes: Vec<String>,
+    pub notes: String,
 }
 
 impl Task {
@@ -134,12 +134,8 @@ impl Task {
             eta: None,
             time_entries: Vec::new(),
             total_time_seconds: 0,
-            notes: Vec::new(),
+            notes: String::new(),
         }
-    }
-    
-    pub fn add_note(&mut self, note: String) {
-        self.notes.push(note);
     }
 
     pub fn start(&mut self) {
@@ -191,7 +187,31 @@ impl Task {
     }
 
     pub fn get_formatted_total_time(&self) -> String {
-        EffortEstimate::from_hours(self.total_time_seconds as f64 / 3600.0)
+        let seconds = self.total_time_seconds;
+        if seconds < 60 {
+            return format!("{}s", seconds);
+        }
+        
+        let minutes = seconds / 60;
+        let hours = minutes / 60;
+        let days = hours / 8; // 8-hour work days
+        
+        let remaining_hours = hours % 8;
+        let remaining_minutes = minutes % 60;
+        
+        let mut parts = Vec::new();
+        
+        if days > 0 {
+            parts.push(format!("{}d", days));
+        }
+        if remaining_hours > 0 || days > 0 {
+            parts.push(format!("{}h", remaining_hours));
+        }
+        if remaining_minutes > 0 || parts.is_empty() {
+            parts.push(format!("{}m", remaining_minutes));
+        }
+        
+        parts.join(" ")
     }
 
     pub fn short_id(&self) -> String {
