@@ -91,4 +91,3 @@ fn format_tree_node(node: &TreeNode, prefix: &str, is_last: bool, lines: &mut Ve
         format_tree_node(child, &child_prefix, child_is_last, lines);
     }
 }
-
