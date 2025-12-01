@@ -1,1 +1,413 @@
-# twig 🪵
+# Twig - Terminal Task Tracker
+
+A flexible, hierarchical task tracking application for the command line, built in Rust.
+
+## Features
+
+- **Hierarchical Tasks**: Create deeply nested task structures with unlimited subtask levels
+- **Time Tracking**: Automatic time tracking with start/pause/complete functionality
+- **Flexible Estimates**: Set effort estimates using intuitive formats (1h, 2d, 3w, 2m)
+- **Task Notes**: Attach multiple notes to any task for detailed tracking
+- **Reportee Management**: Track work for multiple team members with separate task stores
+- **Rich Reports**: Generate daily, weekly, and monthly reports with statistics
+- **Interactive TUI**: Beautiful terminal UI for browsing and managing tasks
+- **Quick CLI Commands**: Fast commands for power users with interactive selectors
+- **Shell Completions**: Autocomplete support for Fish, Bash, Zsh, and PowerShell
+- **Tags and Assignees**: Organize tasks with tags and assignment tracking
+- **Historical Queries**: Query what was done on any given day, week, or month
+
+## Installation
+
+### From Source
+
+```bash
+git clone <repository-url>
+cd twig
+cargo build --release
+sudo cp target/release/twig /usr/local/bin/
+```
+
+## Quick Start
+
+### Launch the TUI
+
+```bash
+twig
+```
+
+Just run `twig` with no arguments to launch the interactive Terminal User Interface.
+
+### Create Your First Task
+
+```bash
+twig add "Complete project documentation"
+```
+
+### Start Working on a Task
+
+```bash
+# With task ID
+twig start abc12345
+
+# Interactive mode (no ID) - shows selector
+twig start
+```
+
+### View Your Tasks
+
+```bash
+# List view
+twig list
+
+# Tree view (hierarchical)
+twig tree
+
+# Filter by status
+twig list --status in-progress
+
+# Filter by tag
+twig list --tag urgent
+```
+
+## CLI Commands
+
+### Task Management
+
+```bash
+# Add a new task
+twig add "Task name" [OPTIONS]
+  --parent <ID>              # Parent task ID
+  --tags <tag1,tag2>         # Comma-separated tags
+  --estimate <1h|2d|3w|2m>   # Effort estimate
+  --eta <YYYY-MM-DD>         # Completion deadline
+  --assignee <name>          # Assign to someone
+  --description <text>       # Task description
+
+# Start a task (starts time tracking)
+twig start [ID]              # Interactive if no ID
+
+# Complete a task
+twig complete [ID]           # Interactive if no ID
+
+# Cancel a task
+twig cancel [ID]             # Interactive if no ID
+
+# Pause time tracking
+twig pause [ID]              # Interactive if no ID
+
+# Update task details
+twig update <ID> [OPTIONS]
+  --title <text>
+  --description <text>
+  --estimate <1h|2d|3w|2m>
+  --eta <YYYY-MM-DD>
+  --assignee <name>
+
+# Add tags to a task
+twig tag <ID> <tag1> <tag2> ...
+
+# Show task details
+twig show <ID>
+
+# Delete a task
+twig delete <ID>
+```
+
+### Viewing Tasks
+
+```bash
+# List tasks
+twig list [OPTIONS]
+  --status <not-started|in-progress|completed|cancelled>
+  --tag <tag>
+  --assignee <name>
+
+# Show task tree (hierarchical view)
+twig tree [OPTIONS]
+  --assignee <name>
+```
+
+### Reports and Statistics
+
+```bash
+# Generate a report
+twig report <daily|weekly|monthly> [OPTIONS]
+  --date <YYYY-MM-DD|today|yesterday|"this week"|"last week">
+  --assignee <name>
+
+# Examples:
+twig report daily                    # Today's work
+twig report weekly --date "last week"
+twig report monthly --assignee john
+
+# Show statistics
+twig stats [OPTIONS]
+  [daily|weekly|monthly]             # Optional period
+  --date <YYYY-MM-DD>
+  --assignee <name>
+
+# Examples:
+twig stats                           # All-time stats
+twig stats weekly                    # This week's stats
+twig stats daily --date 2024-01-15   # Specific day
+```
+
+### Reportee Management
+
+```bash
+# Add a reportee
+twig reportee add <name>
+
+# List reportees
+twig reportee list
+
+# Remove a reportee
+twig reportee remove <name>
+```
+
+### Shell Completions
+
+Generate shell completion scripts:
+
+```bash
+# For Fish
+twig completions fish > ~/.config/fish/completions/twig.fish
+
+# For Bash
+twig completions bash > /etc/bash_completion.d/twig
+
+# For Zsh
+twig completions zsh > ~/.zsh/completions/_twig
+```
+
+## TUI (Terminal User Interface)
+
+Launch with `twig` or `twig tui`.
+
+### Keyboard Shortcuts
+
+**Navigation:**
+- `j` / `↓` - Move down
+- `k` / `↑` - Move up
+- `Enter` / `Space` / `Tab` - Expand/collapse task (shows/hides subtasks)
+
+**Task Management:**
+- `a` - Add new task (will be subtask of selected task)
+- `e` - Edit selected task (title, description, tags, estimate, assignee)
+- `s` - Start selected task (begins time tracking)
+- `c` - Complete selected task (stops time tracking)
+- `x` - Cancel selected task
+- `p` - Pause time tracking (keeps status as "in progress")
+
+**Filters:**
+- `h` - Toggle show/hide completed tasks
+- `H` - Toggle show/hide cancelled tasks
+
+**Other:**
+- `r` - Reload tasks from disk
+- `?` - Show help
+- `q` - Quit
+- `Ctrl+C` - Quit
+
+**Add/Edit Mode:**
+- `↑` / `↓` - Navigate fields (up/down)
+- `Tab` / `Shift+Tab` - Navigate fields (forward/backward)
+- `Ctrl+Enter` - Save
+- `Esc` - Cancel
+
+### Dialog Features
+
+When adding or editing tasks in the TUI, you can:
+- Set **title** (required)
+- Add **description** for detailed information
+- Add **tags** (comma-separated) for organization
+- Set **estimate** (1h, 2d, 3w, 2m format)
+- Assign to a **team member**
+- Add a **note** (notes are appended, multiple notes per task)
+
+### Tree View Indicators
+
+- **▶** - Collapsed (task has children, not showing them)
+- **▼** - Expanded (task has children, showing them)
+- **⏱TRACKING** - Active time tracking (timer is running) - shown in **bold yellow**
+- **⏸PAUSED** - In progress but timer stopped - shown in **gray**
+- **[2.5h]** - Total time spent (for completed tasks)
+
+## Effort Estimates
+
+Twig supports intuitive effort estimation:
+
+- `1h`, `2h`, `3.5h` - Hours
+- `1d`, `2d`, `0.5d` - Days (8 hour workday)
+- `1w`, `2w`, `3w` - Weeks (40 hour work week)
+- `1m`, `2m`, `3m` - Months (~160 hours)
+
+Examples:
+```bash
+twig add "Quick fix" --estimate 2h
+twig add "Major refactor" --estimate 1w
+twig add "Q1 project" --estimate 2m
+```
+
+## Data Storage
+
+Twig stores all data in `~/.twig/`:
+
+```
+~/.twig/
+├── tasks.json              # Your tasks
+├── config.json             # Configuration
+└── reportees/
+    ├── john.json           # John's tasks
+    └── jane.json           # Jane's tasks
+```
+
+All files are human-readable JSON, making them easy to:
+- Back up
+- Version control
+- Inspect or edit manually
+- Sync across machines
+
+## Task Hierarchy
+
+Create complex task hierarchies:
+
+```bash
+# Create parent task
+twig add "Launch new feature"
+# Output: ✓ Task created: Launch new feature [abc12345]
+
+# Create subtasks
+twig add "Design UI mockups" --parent abc12345
+twig add "Implement backend API" --parent abc12345
+twig add "Write tests" --parent abc12345
+
+# View the hierarchy
+twig tree
+```
+
+Output:
+```
+Task Tree:
+════════════════════════════════════════════════════════════
+├─ ○ Launch new feature [abc12345]
+│  ├─ ○ Design UI mockups [def67890]
+│  ├─ ○ Implement backend API [ghi11121]
+│  └─ ○ Write tests [jkl31415]
+════════════════════════════════════════════════════════════
+```
+
+## Time Tracking
+
+Time is automatically tracked when you start, complete, or cancel tasks:
+
+```bash
+# Start working (begins time tracking)
+twig start abc12345
+
+# Do your work...
+
+# Take a break
+twig pause abc12345
+
+# Resume later
+twig start abc12345
+
+# Finish the task (stops time tracking)
+twig complete abc12345
+# Output: 
+# ✓ Completed task: Fix bug [abc12345]
+#   Total time: 2.3h
+```
+
+## Queries and Reports
+
+Track what you accomplished:
+
+```bash
+# What did I do today?
+twig report daily
+
+# What did I complete this week?
+twig report weekly --date "this week"
+
+# What did John complete last month?
+twig report monthly --date "last month" --assignee john
+
+# Show my statistics
+twig stats
+
+# Show weekly statistics
+twig stats weekly
+```
+
+## Examples
+
+### Daily Workflow
+
+```bash
+# Morning: Check your tasks
+twig
+
+# Start working on a task
+twig start
+
+# During the day: Add new tasks as they come up
+twig add "Fix critical bug in login" --tags urgent,bug --estimate 2h
+
+# Mark tasks complete as you finish them
+twig complete
+
+# End of day: Generate a report
+twig report daily
+```
+
+### Project Management
+
+```bash
+# Set up a new project
+twig add "Q1 Website Redesign" --estimate 2m --eta 2024-03-31
+
+# Add major milestones as subtasks
+twig add "Research phase" --parent abc12345 --estimate 1w
+twig add "Design phase" --parent abc12345 --estimate 2w
+twig add "Development phase" --parent abc12345 --estimate 1m
+
+# Assign work to team members
+twig add "Create mockups" --parent def67890 --assignee sarah
+twig add "User interviews" --parent def67890 --assignee john
+
+# Track progress
+twig tree
+twig stats weekly
+```
+
+### Review Work
+
+```bash
+# What did I complete this week?
+twig report weekly
+
+# How accurate are my estimates?
+twig stats weekly  # Shows estimate vs actual variance
+
+# What's currently in progress?
+twig list --status in-progress
+```
+
+## Tips
+
+1. **Use short IDs**: You only need the first 8 characters of a task ID
+2. **Interactive mode**: Omit IDs on start/complete/cancel commands for a picker
+3. **Tag everything**: Tags make filtering much easier later
+4. **Regular reports**: Generate daily reports to track your productivity
+5. **Estimate accurately**: Review stats regularly to improve estimation skills
+6. **TUI for overview**: Use the TUI when you need to browse, CLI for speed
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## License
+
+[Add your license here]
