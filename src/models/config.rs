@@ -40,8 +40,4 @@ impl Config {
             false
         }
     }
-
-    pub fn has_reportee(&self, name: &str) -> bool {
-        self.reportees.iter().any(|r| r == name)
-    }
 }

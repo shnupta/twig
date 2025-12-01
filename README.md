@@ -26,8 +26,7 @@ A flexible, hierarchical task tracking application for the command line, built i
 ```bash
 git clone <repository-url>
 cd twig
-cargo build --release
-sudo cp target/release/twig /usr/local/bin/
+cargo install --path .
 ```
 
 ## Quick Start

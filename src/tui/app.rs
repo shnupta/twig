@@ -12,7 +12,6 @@ use std::io;
 
 pub enum AppMode {
     Normal,
-    Filter,
     Help,
     AddTask,
     EditTask,
@@ -54,7 +53,6 @@ pub enum VisibleItemInfo<'a> {
 pub struct App {
     pub storage: Storage,
     pub selected_index: usize,
-    pub scroll_offset: usize,
     pub mode: AppMode,
     pub view_tab: ViewTab,
     pub reportees: Vec<String>,
@@ -92,7 +90,6 @@ impl App {
         Ok(Self {
             storage,
             selected_index: 0,
-            scroll_offset: 0,
             mode: AppMode::Normal,
             view_tab: ViewTab::MyTasks,
             reportees,
@@ -775,11 +772,6 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                         key.code,
                         KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?')
                     ) {
-                        app.mode = AppMode::Normal;
-                    }
-                }
-                AppMode::Filter => {
-                    if key.code == KeyCode::Esc {
                         app.mode = AppMode::Normal;
                     }
                 }

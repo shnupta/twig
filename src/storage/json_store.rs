@@ -48,15 +48,6 @@ impl Storage {
         self.save()
     }
 
-    pub fn update_task(&mut self, task: Task) -> Result<()> {
-        if let Some(pos) = self.tasks.iter().position(|t| t.id == task.id) {
-            self.tasks[pos] = task;
-            self.save()
-        } else {
-            Err(anyhow::anyhow!("Task not found"))
-        }
-    }
-
     pub fn delete_task(&mut self, id: Uuid) -> Result<()> {
         if let Some(pos) = self.tasks.iter().position(|t| t.id == id) {
             self.tasks.remove(pos);
@@ -78,16 +69,8 @@ impl Storage {
         &self.tasks
     }
 
-    pub fn get_all_tasks_mut(&mut self) -> &mut Vec<Task> {
-        &mut self.tasks
-    }
-
     pub fn find_task_by_short_id(&self, short_id: &str) -> Option<&Task> {
         self.tasks.iter().find(|t| t.short_id() == short_id)
-    }
-
-    pub fn find_task_by_short_id_mut(&mut self, short_id: &str) -> Option<&mut Task> {
-        self.tasks.iter_mut().find(|t| t.short_id() == short_id)
     }
 
     pub fn get_root_tasks(&self) -> Vec<&Task> {

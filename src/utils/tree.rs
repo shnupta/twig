@@ -4,7 +4,6 @@ use crate::storage::Storage;
 pub struct TreeNode {
     pub task: Task,
     pub children: Vec<TreeNode>,
-    pub level: usize,
 }
 
 impl TreeNode {
@@ -12,21 +11,20 @@ impl TreeNode {
         let root_tasks = storage.get_root_tasks();
         root_tasks
             .into_iter()
-            .map(|task| Self::build_tree(task, storage, 0))
+            .map(|task| Self::build_tree(task, storage))
             .collect()
     }
 
-    fn build_tree(task: &Task, storage: &Storage, level: usize) -> TreeNode {
+    fn build_tree(task: &Task, storage: &Storage) -> TreeNode {
         let children_tasks = storage.get_children(task.id);
         let children = children_tasks
             .into_iter()
-            .map(|child| Self::build_tree(child, storage, level + 1))
+            .map(|child| Self::build_tree(child, storage))
             .collect();
 
         TreeNode {
             task: task.clone(),
             children,
-            level,
         }
     }
 }
@@ -94,25 +92,3 @@ fn format_tree_node(node: &TreeNode, prefix: &str, is_last: bool, lines: &mut Ve
     }
 }
 
-pub fn filter_tasks<'a>(
-    tasks: &'a [Task],
-    status: Option<TaskStatus>,
-    tag: Option<&str>,
-) -> Vec<&'a Task> {
-    tasks
-        .iter()
-        .filter(|task| {
-            if let Some(ref s) = status {
-                if task.status != *s {
-                    return false;
-                }
-            }
-            if let Some(t) = tag {
-                if !task.tags.iter().any(|tag| tag == t) {
-                    return false;
-                }
-            }
-            true
-        })
-        .collect()
-}

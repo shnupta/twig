@@ -1,10 +1,37 @@
-use crate::commands::interactive::select_task_mut;
 use crate::models::{Task, TaskStatus};
 use crate::storage::{DataPaths, Storage};
 use crate::utils::{format_datetime, parse_date};
 use anyhow::{Context, Result};
-use dialoguer::{theme::ColorfulTheme, Confirm};
+use dialoguer::{theme::ColorfulTheme, Confirm, Select};
 use uuid::Uuid;
+
+fn select_task_mut<'a>(tasks: &'a mut [Task], prompt: &str) -> Result<Option<&'a mut Task>> {
+    if tasks.is_empty() {
+        println!("No tasks available.");
+        return Ok(None);
+    }
+
+    let items: Vec<String> = tasks
+        .iter()
+        .map(|t| {
+            let status_str = match t.status {
+                TaskStatus::NotStarted => "Not Started",
+                TaskStatus::InProgress => "In Progress",
+                TaskStatus::Completed => "Completed",
+                TaskStatus::Cancelled => "Cancelled",
+            };
+            format!("{} [{}] - {}", t.title, t.short_id(), status_str)
+        })
+        .collect();
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(prompt)
+        .items(&items)
+        .default(0)
+        .interact_opt()?;
+
+    Ok(selection.map(|i| &mut tasks[i]))
+}
 
 fn resolve_task_id(storage: &Storage, id_str: &str) -> Result<Uuid> {
     if id_str.len() == 8 {

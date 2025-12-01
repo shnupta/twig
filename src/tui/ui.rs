@@ -425,7 +425,6 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
             "j/k:↓↑ | Tab/Enter:Expand | ←/→:Tabs | 1-5:Switch tab | s:Start | c:Complete | x:Cancel | p:Pause | a:Add subtask | A:Add top-level | e:Edit | d:Delete | ?:Help | q:Quit"
         }
         AppMode::Help => "Press ? or ESC to close help",
-        AppMode::Filter => "ESC:Cancel",
         AppMode::AddTask => "↑/↓/Tab:Navigate | Enter:Activate button or new line | Ctrl+Enter:Save | ESC:Cancel",
         AppMode::EditTask => "↑/↓/Tab:Navigate | Enter:Activate button or new line | Ctrl+Enter:Save | ESC:Cancel",
         AppMode::DeleteConfirm => "Enter/y:Confirm Delete | ESC/n:Cancel",
