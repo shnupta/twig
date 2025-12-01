@@ -62,11 +62,18 @@ fn format_tree_node(node: &TreeNode, prefix: &str, is_last: bool, lines: &mut Ve
     };
 
     let tags_info = if !node.task.tags.is_empty() {
-        format!(" {}", node.task.tags.iter().map(|t| format!("#{}", t)).collect::<Vec<_>>().join(" "))
+        format!(
+            " {}",
+            node.task
+                .tags
+                .iter()
+                .map(|t| format!("#{}", t))
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
     } else {
         String::new()
     };
-
 
     lines.push(format!(
         "{}{} {} {} [{}]{}{}{}",
@@ -109,4 +116,3 @@ pub fn filter_tasks<'a>(
         })
         .collect()
 }
-

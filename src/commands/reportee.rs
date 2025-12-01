@@ -8,13 +8,13 @@ pub fn add_reportee(name: String) -> Result<()> {
 
     if config.add_reportee(name.clone()) {
         json_store::save_config(&paths.config_file(), &config)?;
-        
+
         // Create empty tasks file for reportee
         let reportee_path = paths.reportee_tasks_file(&name);
         if !reportee_path.exists() {
             std::fs::write(&reportee_path, "[]")?;
         }
-        
+
         println!("✓ Added reportee: {}", name);
     } else {
         println!("Reportee already exists: {}", name);
@@ -41,7 +41,10 @@ pub fn list_reportees() -> Result<()> {
     for reportee in &config.reportees {
         let file_path = paths.reportee_tasks_file(reportee);
         let exists = if file_path.exists() { "✓" } else { "✗" };
-        table.add_row(vec![reportee, &format!("{} {}", exists, file_path.display())]);
+        table.add_row(vec![
+            reportee,
+            &format!("{} {}", exists, file_path.display()),
+        ]);
     }
 
     println!("{}", table);
@@ -64,4 +67,3 @@ pub fn remove_reportee(name: String) -> Result<()> {
 
     Ok(())
 }
-

@@ -41,10 +41,7 @@ fn main() -> Result<()> {
         Some(Commands::Pause { id }) => {
             commands::pause_task(id)?;
         }
-        Some(Commands::List {
-            status,
-            tag,
-        }) => {
+        Some(Commands::List { status, tag }) => {
             commands::list_tasks(status, tag)?;
         }
         Some(Commands::Show { id }) => {
@@ -79,16 +76,10 @@ fn main() -> Result<()> {
                 commands::remove_reportee(name)?;
             }
         },
-        Some(Commands::Report {
-            period,
-            date,
-        }) => {
+        Some(Commands::Report { period, date }) => {
             commands::generate_report(period, date)?;
         }
-        Some(Commands::Stats {
-            period,
-            date,
-        }) => {
+        Some(Commands::Stats { period, date }) => {
             commands::show_stats(period, date)?;
         }
         Some(Commands::Tui) => {
@@ -105,7 +96,7 @@ fn main() -> Result<()> {
 fn generate_completions(shell: Shell) {
     let mut cmd = Cli::command();
     let bin_name = "twig";
-    
+
     eprintln!("Generating completion file for {shell}...");
     generate(shell, &mut cmd, bin_name, &mut io::stdout());
 }

@@ -25,24 +25,21 @@ impl Storage {
             return Ok(());
         }
 
-        let content = fs::read_to_string(path)
-            .context("Failed to read tasks file")?;
-        
+        let content = fs::read_to_string(path).context("Failed to read tasks file")?;
+
         if content.trim().is_empty() {
             self.tasks = Vec::new();
         } else {
-            self.tasks = serde_json::from_str(&content)
-                .context("Failed to parse tasks JSON")?;
+            self.tasks = serde_json::from_str(&content).context("Failed to parse tasks JSON")?;
         }
-        
+
         Ok(())
     }
 
     pub fn save(&self) -> Result<()> {
-        let json = serde_json::to_string_pretty(&self.tasks)
-            .context("Failed to serialize tasks")?;
-        fs::write(&self.file_path, json)
-            .context("Failed to write tasks file")?;
+        let json =
+            serde_json::to_string_pretty(&self.tasks).context("Failed to serialize tasks")?;
+        fs::write(&self.file_path, json).context("Failed to write tasks file")?;
         Ok(())
     }
 
@@ -94,7 +91,10 @@ impl Storage {
     }
 
     pub fn get_root_tasks(&self) -> Vec<&Task> {
-        self.tasks.iter().filter(|t| t.parent_id.is_none()).collect()
+        self.tasks
+            .iter()
+            .filter(|t| t.parent_id.is_none())
+            .collect()
     }
 
     pub fn get_children(&self, parent_id: Uuid) -> Vec<&Task> {
@@ -107,7 +107,7 @@ impl Storage {
     pub fn get_task_hierarchy(&self, task: &Task) -> Vec<Uuid> {
         let mut hierarchy = vec![task.id];
         let mut current_id = task.parent_id;
-        
+
         while let Some(id) = current_id {
             hierarchy.insert(0, id);
             if let Some(parent) = self.get_task(id) {
@@ -116,7 +116,7 @@ impl Storage {
                 break;
             }
         }
-        
+
         hierarchy
     }
 }
@@ -128,18 +128,13 @@ pub fn load_config(path: &Path) -> Result<Config> {
         return Ok(config);
     }
 
-    let content = fs::read_to_string(path)
-        .context("Failed to read config file")?;
-    let config = serde_json::from_str(&content)
-        .context("Failed to parse config JSON")?;
+    let content = fs::read_to_string(path).context("Failed to read config file")?;
+    let config = serde_json::from_str(&content).context("Failed to parse config JSON")?;
     Ok(config)
 }
 
 pub fn save_config(path: &Path, config: &Config) -> Result<()> {
-    let json = serde_json::to_string_pretty(config)
-        .context("Failed to serialize config")?;
-    fs::write(path, json)
-        .context("Failed to write config file")?;
+    let json = serde_json::to_string_pretty(config).context("Failed to serialize config")?;
+    fs::write(path, json).context("Failed to write config file")?;
     Ok(())
 }
-

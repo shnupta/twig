@@ -1,14 +1,11 @@
 use crate::cli::{ReportPeriod, StatsPeriod};
 use crate::models::{Task, TaskStatus};
 use crate::storage::{DataPaths, Storage};
-use crate::utils::date::{DateRange, format_date, format_datetime, format_duration_human};
+use crate::utils::date::{format_date, format_datetime, format_duration_human, DateRange};
 use anyhow::Result;
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 
-pub fn generate_report(
-    period: ReportPeriod,
-    date: Option<String>,
-) -> Result<()> {
+pub fn generate_report(period: ReportPeriod, date: Option<String>) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
@@ -23,11 +20,14 @@ pub fn generate_report(
     let start = range.start();
     let end = range.end();
 
-    println!("\n{} Report", match period {
-        ReportPeriod::Daily => "Daily",
-        ReportPeriod::Weekly => "Weekly",
-        ReportPeriod::Monthly => "Monthly",
-    });
+    println!(
+        "\n{} Report",
+        match period {
+            ReportPeriod::Daily => "Daily",
+            ReportPeriod::Weekly => "Weekly",
+            ReportPeriod::Monthly => "Monthly",
+        }
+    );
     println!("Period: {} to {}", format_date(&start), format_date(&end));
     println!("{}", "=".repeat(60));
 
@@ -148,10 +148,7 @@ pub fn generate_report(
     Ok(())
 }
 
-pub fn show_stats(
-    period: Option<StatsPeriod>,
-    date: Option<String>,
-) -> Result<()> {
+pub fn show_stats(period: Option<StatsPeriod>, date: Option<String>) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
@@ -169,7 +166,7 @@ pub fn show_stats(
 
         let start = range.start();
         let end = range.end();
-        
+
         let filtered: Vec<&Task> = tasks
             .into_iter()
             .filter(|t| {
@@ -195,17 +192,45 @@ pub fn show_stats(
     println!("{}", "=".repeat(60));
 
     let total = tasks.len();
-    let not_started = tasks.iter().filter(|t| t.status == TaskStatus::NotStarted).count();
-    let in_progress = tasks.iter().filter(|t| t.status == TaskStatus::InProgress).count();
-    let completed = tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
-    let cancelled = tasks.iter().filter(|t| t.status == TaskStatus::Cancelled).count();
+    let not_started = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::NotStarted)
+        .count();
+    let in_progress = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::InProgress)
+        .count();
+    let completed = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Completed)
+        .count();
+    let cancelled = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Cancelled)
+        .count();
 
     println!("\nTask Status:");
     println!("  Total:        {}", total);
-    println!("  Not Started:  {} ({:.1}%)", not_started, (not_started as f64 / total as f64) * 100.0);
-    println!("  In Progress:  {} ({:.1}%)", in_progress, (in_progress as f64 / total as f64) * 100.0);
-    println!("  Completed:    {} ({:.1}%)", completed, (completed as f64 / total as f64) * 100.0);
-    println!("  Cancelled:    {} ({:.1}%)", cancelled, (cancelled as f64 / total as f64) * 100.0);
+    println!(
+        "  Not Started:  {} ({:.1}%)",
+        not_started,
+        (not_started as f64 / total as f64) * 100.0
+    );
+    println!(
+        "  In Progress:  {} ({:.1}%)",
+        in_progress,
+        (in_progress as f64 / total as f64) * 100.0
+    );
+    println!(
+        "  Completed:    {} ({:.1}%)",
+        completed,
+        (completed as f64 / total as f64) * 100.0
+    );
+    println!(
+        "  Cancelled:    {} ({:.1}%)",
+        cancelled,
+        (cancelled as f64 / total as f64) * 100.0
+    );
 
     // Time statistics
     let total_time: i64 = tasks.iter().map(|t| t.total_time_seconds).sum();
@@ -220,7 +245,10 @@ pub fn show_stats(
     println!("  Average Time: {}", format_duration_human(avg_time));
 
     // Estimate vs actual for completed tasks
-    let completed_tasks: Vec<&&Task> = tasks.iter().filter(|t| t.status == TaskStatus::Completed).collect();
+    let completed_tasks: Vec<&&Task> = tasks
+        .iter()
+        .filter(|t| t.status == TaskStatus::Completed)
+        .collect();
     if !completed_tasks.is_empty() {
         let with_estimates: Vec<&&Task> = completed_tasks
             .iter()
@@ -241,7 +269,10 @@ pub fn show_stats(
             println!("\nEstimate Accuracy (Completed Tasks with Estimates):");
             println!("  Estimated: {:.1}h", total_estimated);
             println!("  Actual:    {:.1}h", total_actual);
-            println!("  Variance:  {:.1}%", ((total_actual - total_estimated) / total_estimated) * 100.0);
+            println!(
+                "  Variance:  {:.1}%",
+                ((total_actual - total_estimated) / total_estimated) * 100.0
+            );
         }
     }
 
@@ -266,4 +297,3 @@ pub fn show_stats(
 
     Ok(())
 }
-

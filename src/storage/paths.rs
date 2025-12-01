@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 
 pub struct DataPaths {
     base_dir: PathBuf,
@@ -7,16 +7,14 @@ pub struct DataPaths {
 
 impl DataPaths {
     pub fn new() -> Result<Self> {
-        let home = std::env::var("HOME")
-            .context("HOME environment variable not set")?;
+        let home = std::env::var("HOME").context("HOME environment variable not set")?;
         let base_dir = Path::new(&home).join(".twig");
-        
+
         // Create directories if they don't exist
-        std::fs::create_dir_all(&base_dir)
-            .context("Failed to create .twig directory")?;
+        std::fs::create_dir_all(&base_dir).context("Failed to create .twig directory")?;
         std::fs::create_dir_all(base_dir.join("reportees"))
             .context("Failed to create reportees directory")?;
-        
+
         Ok(Self { base_dir })
     }
 
@@ -33,7 +31,9 @@ impl DataPaths {
     }
 
     pub fn reportee_tasks_file(&self, name: &str) -> PathBuf {
-        self.base_dir.join("reportees").join(format!("{}.json", name))
+        self.base_dir
+            .join("reportees")
+            .join(format!("{}.json", name))
     }
 
     pub fn reportees_dir(&self) -> PathBuf {
@@ -65,4 +65,3 @@ impl Default for DataPaths {
         Self::new().expect("Failed to initialize data paths")
     }
 }
-

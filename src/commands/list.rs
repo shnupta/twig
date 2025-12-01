@@ -5,10 +5,7 @@ use crate::utils::format_datetime;
 use anyhow::Result;
 use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
 
-pub fn list_tasks(
-    status: Option<StatusFilter>,
-    tag: Option<String>,
-) -> Result<()> {
+pub fn list_tasks(status: Option<StatusFilter>, tag: Option<String>) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
@@ -59,7 +56,11 @@ pub fn list_tasks(
         let tags_str = if task.tags.is_empty() {
             String::new()
         } else {
-            task.tags.iter().map(|t| format!("#{}", t)).collect::<Vec<_>>().join(" ")
+            task.tags
+                .iter()
+                .map(|t| format!("#{}", t))
+                .collect::<Vec<_>>()
+                .join(" ")
         };
 
         let time_str = if task.total_time_seconds > 0 {
@@ -83,4 +84,3 @@ pub fn list_tasks(
 
     Ok(())
 }
-

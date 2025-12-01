@@ -1,6 +1,5 @@
-pub mod task;
 pub mod config;
+pub mod task;
 
-pub use task::{Task, TaskStatus};
 pub use config::Config;
-
+pub use task::{Task, TaskStatus};

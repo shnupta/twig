@@ -1,9 +1,9 @@
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use anyhow::{Context, Result};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 
 pub fn parse_date(input: &str) -> Result<DateTime<Utc>> {
     let input = input.trim().to_lowercase();
-    
+
     match input.as_str() {
         "today" => {
             let local = Local::now();
@@ -19,9 +19,12 @@ pub fn parse_date(input: &str) -> Result<DateTime<Utc>> {
         }
         _ => {
             // Try parsing as ISO date (YYYY-MM-DD)
-            let naive = NaiveDate::parse_from_str(&input, "%Y-%m-%d")
-                .context("Invalid date format. Use YYYY-MM-DD or 'today', 'yesterday', 'tomorrow'")?;
-            let dt = Local.from_local_datetime(&naive.and_hms_opt(0, 0, 0).unwrap()).unwrap();
+            let naive = NaiveDate::parse_from_str(&input, "%Y-%m-%d").context(
+                "Invalid date format. Use YYYY-MM-DD or 'today', 'yesterday', 'tomorrow'",
+            )?;
+            let dt = Local
+                .from_local_datetime(&naive.and_hms_opt(0, 0, 0).unwrap())
+                .unwrap();
             Ok(dt.with_timezone(&Utc))
         }
     }
@@ -29,7 +32,7 @@ pub fn parse_date(input: &str) -> Result<DateTime<Utc>> {
 
 pub enum DateRange {
     Day(DateTime<Utc>),
-    Week(DateTime<Utc>), // Start of week
+    Week(DateTime<Utc>),  // Start of week
     Month(DateTime<Utc>), // Start of month
 }
 
@@ -100,22 +103,34 @@ impl DateRange {
 
     pub fn end(&self) -> DateTime<Utc> {
         match self {
-            DateRange::Day(d) => (d.date_naive() + Duration::days(1)).and_hms_opt(0, 0, 0).unwrap().and_utc(),
-            DateRange::Week(d) => (d.date_naive() + Duration::days(7)).and_hms_opt(0, 0, 0).unwrap().and_utc(),
+            DateRange::Day(d) => (d.date_naive() + Duration::days(1))
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc(),
+            DateRange::Week(d) => (d.date_naive() + Duration::days(7))
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc(),
             DateRange::Month(d) => {
                 let next_month = if d.month() == 12 {
                     d.with_year(d.year() + 1).unwrap().with_month(1).unwrap()
                 } else {
                     d.with_month(d.month() + 1).unwrap()
                 };
-                next_month.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc()
+                next_month
+                    .date_naive()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+                    .and_utc()
             }
         }
     }
 }
 
 pub fn format_datetime(dt: &DateTime<Utc>) -> String {
-    dt.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string()
+    dt.with_timezone(&Local)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }
 
 pub fn format_date(dt: &DateTime<Utc>) -> String {
@@ -126,16 +141,16 @@ pub fn format_duration_human(seconds: i64) -> String {
     if seconds < 60 {
         return format!("{}s", seconds);
     }
-    
+
     let minutes = seconds / 60;
     let hours = minutes / 60;
     let days = hours / 8; // 8-hour work days
-    
+
     let remaining_hours = hours % 8;
     let remaining_minutes = minutes % 60;
-    
+
     let mut parts = Vec::new();
-    
+
     if days > 0 {
         parts.push(format!("{}d", days));
     }
@@ -145,7 +160,6 @@ pub fn format_duration_human(seconds: i64) -> String {
     if remaining_minutes > 0 || parts.is_empty() {
         parts.push(format!("{}m", remaining_minutes));
     }
-    
+
     parts.join(" ")
 }
-

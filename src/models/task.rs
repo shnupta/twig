@@ -56,18 +56,24 @@ impl EffortEstimate {
     pub fn parse(s: &str) -> anyhow::Result<Self> {
         let s = s.trim().to_lowercase();
         let (num_str, unit_str) = s.split_at(s.len() - 1);
-        
-        let value: f64 = num_str.parse()
+
+        let value: f64 = num_str
+            .parse()
             .map_err(|_| anyhow::anyhow!("Invalid effort value: {}", num_str))?;
-        
+
         let unit = match unit_str {
             "h" => EffortUnit::Hours,
             "d" => EffortUnit::Days,
             "w" => EffortUnit::Weeks,
             "m" => EffortUnit::Months,
-            _ => return Err(anyhow::anyhow!("Invalid effort unit: {}. Use h/d/w/m", unit_str)),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Invalid effort unit: {}. Use h/d/w/m",
+                    unit_str
+                ))
+            }
         };
-        
+
         Ok(Self { value, unit })
     }
 
@@ -75,8 +81,8 @@ impl EffortEstimate {
     pub fn to_hours(&self) -> f64 {
         match self.unit {
             EffortUnit::Hours => self.value,
-            EffortUnit::Days => self.value * 8.0,    // 8 hour workday
-            EffortUnit::Weeks => self.value * 40.0,  // 5 day work week
+            EffortUnit::Days => self.value * 8.0, // 8 hour workday
+            EffortUnit::Weeks => self.value * 40.0, // 5 day work week
             EffortUnit::Months => self.value * 160.0, // ~4 weeks per month
         }
     }
@@ -141,7 +147,7 @@ impl Task {
             self.started_at = Some(Utc::now());
         }
         self.status = TaskStatus::InProgress;
-        
+
         // Start a new time entry
         self.time_entries.push(TimeEntry::new(Utc::now()));
     }
@@ -189,16 +195,16 @@ impl Task {
         if seconds < 60 {
             return format!("{}s", seconds);
         }
-        
+
         let minutes = seconds / 60;
         let hours = minutes / 60;
         let days = hours / 8; // 8-hour work days
-        
+
         let remaining_hours = hours % 8;
         let remaining_minutes = minutes % 60;
-        
+
         let mut parts = Vec::new();
-        
+
         if days > 0 {
             parts.push(format!("{}d", days));
         }
@@ -208,7 +214,7 @@ impl Task {
         if remaining_minutes > 0 || parts.is_empty() {
             parts.push(format!("{}m", remaining_minutes));
         }
-        
+
         parts.join(" ")
     }
 
@@ -253,4 +259,3 @@ mod tests {
         assert!(!task.has_active_time_entry());
     }
 }
-

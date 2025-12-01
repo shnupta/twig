@@ -193,11 +193,14 @@ pub fn show_task(id: String) -> Result<()> {
         println!("Description: {}", task.description);
     }
 
-
     if !task.tags.is_empty() {
         println!(
             "Tags:        {}",
-            task.tags.iter().map(|t| format!("#{}", t)).collect::<Vec<_>>().join(" ")
+            task.tags
+                .iter()
+                .map(|t| format!("#{}", t))
+                .collect::<Vec<_>>()
+                .join(" ")
         );
     }
 
@@ -322,7 +325,11 @@ pub fn delete_task(id: String) -> Result<()> {
     }
 
     let confirmation = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("Delete task '{}' [{}]?", task.title, task.short_id()))
+        .with_prompt(format!(
+            "Delete task '{}' [{}]?",
+            task.title,
+            task.short_id()
+        ))
         .default(false)
         .interact()?;
 
@@ -359,4 +366,3 @@ pub fn tag_task(id: String, tags: Vec<String>) -> Result<()> {
 
     Ok(())
 }
-

@@ -23,4 +23,3 @@ pub fn show_tree() -> Result<()> {
 
     Ok(())
 }
-

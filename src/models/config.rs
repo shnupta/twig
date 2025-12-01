@@ -45,4 +45,3 @@ impl Config {
         self.reportees.iter().any(|r| r == name)
     }
 }
-

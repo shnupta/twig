@@ -164,7 +164,7 @@ pub enum ReporteeCommands {
         /// Reportee name
         name: String,
     },
-    
+
     /// List all reportees
     List,
 
@@ -196,4 +196,3 @@ pub enum StatsPeriod {
     Weekly,
     Monthly,
 }
-

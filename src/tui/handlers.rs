@@ -19,4 +19,3 @@ pub fn handle_cancel_task(app: &mut App) -> Result<()> {
 pub fn handle_pause_task(app: &mut App) -> Result<()> {
     app.pause_selected_task()
 }
-

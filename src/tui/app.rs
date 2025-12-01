@@ -79,7 +79,7 @@ impl App {
         // Load reportees
         let config = crate::storage::json_store::load_config(&paths.config_file())?;
         let reportees = config.reportees.clone();
-        
+
         // Load reportee storages
         let mut reportee_storages = std::collections::HashMap::new();
         for reportee in &reportees {
@@ -115,7 +115,7 @@ impl App {
             visible_task_list: Vec::new(),
         })
     }
-    
+
     pub fn switch_tab(&mut self) {
         self.view_tab = match &self.view_tab {
             ViewTab::MyTasks => {
@@ -133,15 +133,17 @@ impl App {
 
     pub fn rebuild_visible_task_list(&mut self) {
         self.visible_task_list.clear();
-        
+
         match &self.view_tab {
             ViewTab::MyTasks => {
-                let root_task_ids: Vec<uuid::Uuid> = self.storage.get_root_tasks()
+                let root_task_ids: Vec<uuid::Uuid> = self
+                    .storage
+                    .get_root_tasks()
                     .into_iter()
                     .filter(|t| self.should_show_task(t))
                     .map(|t| t.id)
                     .collect();
-                
+
                 for root_id in root_task_ids {
                     self.add_task_to_visible_list(root_id, "me".to_string());
                 }
@@ -150,20 +152,23 @@ impl App {
                 let reportees = self.reportees.clone();
                 for reportee in &reportees {
                     // Always add reportee header
-                    self.visible_task_list.push(VisibleItem::ReporteeHeader(reportee.clone()));
-                    
+                    self.visible_task_list
+                        .push(VisibleItem::ReporteeHeader(reportee.clone()));
+
                     // If reportee is expanded, show their tasks
                     if self.expanded_reportees.contains(reportee) {
-                        let root_task_ids: Vec<uuid::Uuid> = if let Some(storage) = self.reportee_storages.get(reportee) {
-                            storage.get_root_tasks()
-                                .into_iter()
-                                .filter(|t| self.should_show_task(t))
-                                .map(|t| t.id)
-                                .collect()
-                        } else {
-                            vec![]
-                        };
-                        
+                        let root_task_ids: Vec<uuid::Uuid> =
+                            if let Some(storage) = self.reportee_storages.get(reportee) {
+                                storage
+                                    .get_root_tasks()
+                                    .into_iter()
+                                    .filter(|t| self.should_show_task(t))
+                                    .map(|t| t.id)
+                                    .collect()
+                            } else {
+                                vec![]
+                            };
+
                         for root_id in root_task_ids {
                             self.add_task_to_visible_list(root_id, reportee.clone());
                         }
@@ -174,20 +179,21 @@ impl App {
     }
 
     fn add_task_to_visible_list(&mut self, task_id: uuid::Uuid, owner: String) {
-        self.visible_task_list.push(VisibleItem::Task { 
-            id: task_id, 
-            owner: owner.clone() 
+        self.visible_task_list.push(VisibleItem::Task {
+            id: task_id,
+            owner: owner.clone(),
         });
-        
+
         // If task is expanded, add its children
         if self.expanded_tasks.contains(&task_id) {
             let storage = self.get_storage_for_owner(&owner);
-            let child_ids: Vec<uuid::Uuid> = storage.get_children(task_id)
+            let child_ids: Vec<uuid::Uuid> = storage
+                .get_children(task_id)
                 .into_iter()
                 .filter(|c| self.should_show_task(c))
                 .map(|c| c.id)
                 .collect();
-                
+
             for child_id in child_ids {
                 self.add_task_to_visible_list(child_id, owner.clone());
             }
@@ -310,7 +316,7 @@ impl App {
                 if !self.has_children(*id, owner) {
                     return; // No children to expand
                 }
-                
+
                 if let Some(pos) = self.expanded_tasks.iter().position(|&x| x == *id) {
                     self.expanded_tasks.remove(pos);
                 } else {
@@ -369,7 +375,7 @@ impl App {
             let tags = task.tags.join(", ");
             let estimate = task.get_formatted_estimate().unwrap_or_default();
             let notes = task.notes.clone();
-            
+
             self.editing_task_id = Some(task_id);
             self.input_state = InputState {
                 title,
@@ -386,29 +392,35 @@ impl App {
     pub fn save_new_task(&mut self) -> Result<()> {
         let mut task = Task::new(self.input_state.title.clone());
         task.description = self.input_state.description.clone();
-        
+
         if !self.input_state.tags.is_empty() {
-            task.tags = self.input_state.tags.split(',').map(|s| s.trim().to_string()).collect();
+            task.tags = self
+                .input_state
+                .tags
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect();
         }
-        
+
         if !self.input_state.estimate.is_empty() {
             let _ = task.set_estimate(&self.input_state.estimate);
         }
-        
+
         task.notes = self.input_state.note.clone();
-        
+
         // Set parent based on editing_task_id (which stores the parent for new tasks)
         if let Some(parent_id) = self.editing_task_id {
             task.parent_id = Some(parent_id);
         }
-        
+
         // Determine which storage to add to
         let owner: String = match &self.view_tab {
             ViewTab::MyTasks => "me".to_string(),
             ViewTab::AllReportees => {
                 // If adding as subtask, use parent's owner
                 if let Some(parent_id) = self.editing_task_id {
-                    self.visible_task_list.iter()
+                    self.visible_task_list
+                        .iter()
                         .find_map(|item| {
                             if let VisibleItem::Task { id, owner } = item {
                                 if *id == parent_id {
@@ -428,7 +440,7 @@ impl App {
                 }
             }
         };
-        
+
         let storage = self.get_storage_for_owner_mut(&owner);
         storage.add_task(task)?;
         self.rebuild_visible_task_list();
@@ -445,9 +457,11 @@ impl App {
             let tags = self.input_state.tags.clone();
             let estimate = self.input_state.estimate.clone();
             let notes = self.input_state.note.clone();
-            
+
             // Get the owner from visible list
-            let owner = self.visible_task_list.iter()
+            let owner = self
+                .visible_task_list
+                .iter()
                 .find_map(|item| {
                     if let VisibleItem::Task { id, owner } = item {
                         if *id == task_id {
@@ -457,25 +471,25 @@ impl App {
                     None
                 })
                 .unwrap_or_else(|| "me".to_string());
-            
+
             {
                 let storage = self.get_storage_for_owner_mut(&owner);
                 if let Some(task) = storage.get_task_mut(task_id) {
                     task.title = title;
                     task.description = description;
-                    
+
                     if !tags.is_empty() {
                         task.tags = tags.split(',').map(|s| s.trim().to_string()).collect();
                     } else {
                         task.tags.clear();
                     }
-                    
+
                     if !estimate.is_empty() {
                         let _ = task.set_estimate(&estimate);
                     } else {
                         task.estimated_effort_hours = None;
                     }
-                    
+
                     task.notes = notes;
                 }
                 storage.save()?;
@@ -501,7 +515,9 @@ impl App {
     pub fn confirm_delete_task(&mut self) -> Result<()> {
         if let Some(task_id) = self.editing_task_id {
             // Find owner
-            let owner = self.visible_task_list.iter()
+            let owner = self
+                .visible_task_list
+                .iter()
                 .find_map(|item| {
                     if let VisibleItem::Task { id, owner } = item {
                         if *id == task_id {
@@ -511,8 +527,9 @@ impl App {
                     None
                 })
                 .unwrap_or_else(|| "me".to_string());
-            
-            self.get_storage_for_owner_mut(&owner).delete_task(task_id)?;
+
+            self.get_storage_for_owner_mut(&owner)
+                .delete_task(task_id)?;
             self.rebuild_visible_task_list();
             // Adjust selection if needed
             if self.selected_index >= self.visible_task_list.len() && self.selected_index > 0 {
@@ -534,18 +551,18 @@ impl App {
                 }
             }
         }
-        
+
         // Fallback: search all storages
         if let Some(task) = self.storage.get_task(id) {
             return Some((task, "me"));
         }
-        
+
         for (name, storage) in &self.reportee_storages {
             if let Some(task) = storage.get_task(id) {
                 return Some((task, name.as_str()));
             }
         }
-        
+
         None
     }
 
@@ -619,7 +636,7 @@ impl App {
         self.rebuild_visible_task_list();
         Ok(())
     }
-    
+
     pub fn input_char(&mut self, c: char) {
         let field = match self.input_state.current_field {
             0 => &mut self.input_state.title,
@@ -685,10 +702,7 @@ pub fn run_tui() -> Result<()> {
     Ok(())
 }
 
-fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut App,
-) -> Result<()> {
+fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()> {
     loop {
         terminal.draw(|f| ui::draw(f, app))?;
 
@@ -747,14 +761,20 @@ fn run_app<B: ratatui::backend::Backend>(
                         KeyCode::Char('d') => {
                             app.start_delete_task();
                         }
-                        KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Right | KeyCode::Left => {
+                        KeyCode::Char('1')
+                        | KeyCode::Char('2')
+                        | KeyCode::Right
+                        | KeyCode::Left => {
                             app.switch_tab();
                         }
                         _ => {}
                     }
                 }
                 AppMode::Help => {
-                    if matches!(key.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?')) {
+                    if matches!(
+                        key.code,
+                        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?')
+                    ) {
                         app.mode = AppMode::Normal;
                     }
                 }
@@ -763,17 +783,15 @@ fn run_app<B: ratatui::backend::Backend>(
                         app.mode = AppMode::Normal;
                     }
                 }
-                AppMode::DeleteConfirm => {
-                    match key.code {
-                        KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
-                            let _ = app.confirm_delete_task();
-                        }
-                        KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
-                            app.cancel_input();
-                        }
-                        _ => {}
+                AppMode::DeleteConfirm => match key.code {
+                    KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                        let _ = app.confirm_delete_task();
                     }
-                }
+                    KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') => {
+                        app.cancel_input();
+                    }
+                    _ => {}
+                },
                 AppMode::AddTask | AppMode::EditTask => {
                     match key.code {
                         KeyCode::Esc => {
@@ -833,4 +851,3 @@ fn run_app<B: ratatui::backend::Backend>(
 
     Ok(())
 }
-

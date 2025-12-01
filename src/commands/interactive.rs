@@ -57,4 +57,3 @@ pub fn select_task_mut<'a>(tasks: &'a mut [Task], prompt: &str) -> Result<Option
 
     Ok(selection.map(|i| &mut tasks[i]))
 }
-

@@ -37,9 +37,9 @@ fn draw_main_view(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5),  // Header (taller for tabs)
-            Constraint::Min(0),     // Main content
-            Constraint::Length(3),  // Footer
+            Constraint::Length(5), // Header (taller for tabs)
+            Constraint::Min(0),    // Main content
+            Constraint::Length(3), // Footer
         ])
         .split(f.area());
 
@@ -61,37 +61,61 @@ fn draw_main_view(f: &mut Frame, app: &App) {
 
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     let filters = vec![
-        if app.show_completed { "✓ Completed" } else { "✗ Completed" },
-        if app.show_cancelled { "✓ Cancelled" } else { "✗ Cancelled" },
+        if app.show_completed {
+            "✓ Completed"
+        } else {
+            "✗ Completed"
+        },
+        if app.show_cancelled {
+            "✓ Cancelled"
+        } else {
+            "✗ Cancelled"
+        },
     ];
-    
+
     let filter_text = filters.join(" | ");
-    
+
     // Build tab bar
     let mut tab_spans = vec![
         Span::raw("[1] "),
         if matches!(app.view_tab, ViewTab::MyTasks) {
-            Span::styled("My Tasks", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD | Modifier::UNDERLINED))
+            Span::styled(
+                "My Tasks",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            )
         } else {
             Span::styled("My Tasks", Style::default())
         },
     ];
-    
+
     if !app.reportees.is_empty() {
         tab_spans.push(Span::raw("  [2] "));
         if matches!(app.view_tab, ViewTab::AllReportees) {
-            tab_spans.push(Span::styled("Reportees", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)));
+            tab_spans.push(Span::styled(
+                "Reportees",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            ));
         } else {
             tab_spans.push(Span::styled("Reportees", Style::default()));
         }
     }
-    
-    tab_spans.push(Span::styled("  (1/2 to switch)", Style::default().fg(Color::DarkGray)));
-    
+
+    tab_spans.push(Span::styled(
+        "  (1/2 to switch)",
+        Style::default().fg(Color::DarkGray),
+    ));
+
     let header = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled("twig", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "twig",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(tab_spans),
         Line::from(filter_text),
     ])
@@ -111,7 +135,7 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
                 VisibleItemInfo::ReporteeHeader { name, is_expanded } => {
                     let expand_indicator = if *is_expanded { "▼" } else { "▶" };
                     let content = format!("{} 👤 {}", expand_indicator, name);
-                    
+
                     let style = if i == app.selected_index {
                         Style::default()
                             .fg(Color::Black)
@@ -122,7 +146,7 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
                             .fg(Color::Cyan)
                             .add_modifier(Modifier::BOLD)
                     };
-                    
+
                     ListItem::new(Line::from(Span::styled(content, style)))
                 }
                 VisibleItemInfo::Task { task, depth, owner } => {
@@ -139,7 +163,7 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
                         TaskStatus::Completed => Color::Green,
                         TaskStatus::Cancelled => Color::Red,
                     };
-                    
+
                     // Expand/collapse indicator
                     let expand_indicator = if app.has_children(task.id, owner) {
                         if app.is_expanded(task.id) {
@@ -176,15 +200,13 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
                     );
 
                     // Build the line with styled time tracking info
-                    let mut line_spans = vec![
-                        Span::raw(base_content),
-                    ];
+                    let mut line_spans = vec![Span::raw(base_content)];
 
                     if !time_info.is_empty() {
                         if let Some(color) = time_color {
                             line_spans.push(Span::styled(
                                 time_info,
-                                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                                Style::default().fg(color).add_modifier(Modifier::BOLD),
                             ));
                         } else {
                             line_spans.push(Span::raw(time_info));
@@ -206,12 +228,15 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(format!("Task Tree ({}/{})", app.selected_index + 1, visible_items.len()))
-                .borders(Borders::ALL),
-        );
+    let list = List::new(items).block(
+        Block::default()
+            .title(format!(
+                "Task Tree ({}/{})",
+                app.selected_index + 1,
+                visible_items.len()
+            ))
+            .borders(Borders::ALL),
+    );
 
     f.render_widget(list, area);
 }
@@ -248,9 +273,10 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
 
         if !task.description.is_empty() {
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled("Description:", Style::default().add_modifier(Modifier::BOLD)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "Description:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]));
             lines.push(Line::from(task.description.clone()));
         }
 
@@ -258,20 +284,26 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
                 Span::styled("Tags: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(task.tags.iter().map(|t| format!("#{}", t)).collect::<Vec<_>>().join(" ")),
+                Span::raw(
+                    task.tags
+                        .iter()
+                        .map(|t| format!("#{}", t))
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
             ]));
         }
 
         if !task.notes.is_empty() {
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled("Notes:", Style::default().add_modifier(Modifier::BOLD)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "Notes:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]));
             for line in task.notes.lines() {
                 lines.push(Line::from(format!("  {}", line)));
             }
         }
-
 
         if let Some(estimate) = task.get_formatted_estimate() {
             lines.push(Line::from(vec![
@@ -282,7 +314,10 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
 
         if task.total_time_seconds > 0 {
             lines.push(Line::from(vec![
-                Span::styled("Time Spent: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Time Spent: ",
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(task.get_formatted_total_time()),
             ]));
         }
@@ -295,15 +330,31 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
                     let hours = duration / 3600;
                     let minutes = (duration % 3600) / 60;
                     lines.push(Line::from(vec![
-                        Span::styled("⏱ ACTIVELY TRACKING ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                        Span::styled(format!("({}h {}m)", hours, minutes), Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            "⏱ ACTIVELY TRACKING ",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            format!("({}h {}m)", hours, minutes),
+                            Style::default().fg(Color::Yellow),
+                        ),
                     ]));
                 }
             }
         } else if task.status == TaskStatus::InProgress {
             lines.push(Line::from(vec![
-                Span::styled("⏸ PAUSED ", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
-                Span::styled("(press 's' to resume)", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    "⏸ PAUSED ",
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "(press 's' to resume)",
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]));
         }
 
@@ -338,12 +389,10 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
         let children = storage.get_children(task.id);
         if !children.is_empty() {
             lines.push(Line::from(""));
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("Subtasks ({})", children.len()),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                format!("Subtasks ({})", children.len()),
+                Style::default().add_modifier(Modifier::BOLD),
+            )]));
             for child in children.iter().take(5) {
                 let status_icon = match child.status {
                     TaskStatus::NotStarted => "○",
@@ -392,22 +441,27 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
 fn draw_help(f: &mut Frame) {
     let help_text = vec![
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Twig Help", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Twig Help",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Navigation", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Navigation",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  j / ↓            - Move down"),
         Line::from("  k / ↑            - Move up"),
         Line::from("  Enter/Space/Tab  - Expand/collapse task (shows/hides subtasks)"),
         Line::from("  ← / →            - Switch tabs (My Tasks / Reportees)"),
         Line::from("  1-5              - Jump to specific tab"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Task Management", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Task Management",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  a       - Add new task (as subtask of selected)"),
         Line::from("  A       - Add new task (as top-level, not a subtask)"),
         Line::from("  e       - Edit selected task"),
@@ -417,33 +471,46 @@ fn draw_help(f: &mut Frame) {
         Line::from("  x - Cancel task"),
         Line::from("  p - Pause time tracking (keeps task in progress)"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Filters", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Filters",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  h - Toggle show/hide completed"),
         Line::from("  H - Toggle show/hide cancelled"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Other", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Other",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  r       - Reload tasks from disk"),
         Line::from("  ?       - Toggle help"),
         Line::from("  q       - Quit"),
         Line::from("  Ctrl+C  - Quit"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Tree View Indicators", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Tree View Indicators",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  ▶ - Collapsed (has children, not showing)"),
         Line::from("  ▼ - Expanded (has children, showing)"),
         Line::from(vec![
             Span::raw("  "),
-            Span::styled("⏱TRACKING", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "⏱TRACKING",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" - Timer actively running"),
         ]),
         Line::from(vec![
             Span::raw("  "),
-            Span::styled("⏸PAUSED", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "⏸PAUSED",
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("   - In progress but timer stopped"),
         ]),
         Line::from(""),
@@ -483,14 +550,14 @@ fn draw_delete_confirm_dialog(f: &mut Frame, app: &App) {
     if let Some(task_id) = app.editing_task_id {
         if let Some((task, owner)) = app.get_task_by_id_with_owner(task_id) {
             let area = centered_rect(60, 30, f.area());
-            
+
             // Clear background
             f.render_widget(ratatui::widgets::Clear, area);
-            
+
             let storage = app.get_storage_for_owner(owner);
             let children = storage.get_children(task_id);
             let has_subtasks = !children.is_empty();
-            
+
             let warning_text = if has_subtasks {
                 format!(
                     "Delete task \"{}\"?\n\n⚠ WARNING: This task has {} subtask(s)!\nDeleting it will NOT delete the subtasks,\nbut they will become orphaned.\n\nAre you sure?",
@@ -498,55 +565,55 @@ fn draw_delete_confirm_dialog(f: &mut Frame, app: &App) {
                     children.len()
                 )
             } else {
-                format!("Delete task \"{}\"?\n\nThis action cannot be undone.", task.title)
+                format!(
+                    "Delete task \"{}\"?\n\nThis action cannot be undone.",
+                    task.title
+                )
             };
-            
+
             let warning_style = if has_subtasks {
                 Style::default().fg(Color::Red)
             } else {
                 Style::default().fg(Color::Yellow)
             };
-            
+
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(2)
                 .constraints([
-                    Constraint::Min(5),     // Warning text
-                    Constraint::Length(3),  // Buttons
+                    Constraint::Min(5),    // Warning text
+                    Constraint::Length(3), // Buttons
                 ])
                 .split(area);
-            
+
             let block = Block::default()
                 .title("Confirm Delete")
                 .borders(Borders::ALL)
                 .style(Style::default().bg(Color::Black));
             f.render_widget(block, area);
-            
+
             let warning = Paragraph::new(warning_text)
                 .style(warning_style)
                 .wrap(Wrap { trim: true })
                 .alignment(ratatui::layout::Alignment::Center);
             f.render_widget(warning, chunks[0]);
-            
+
             // Buttons
             let button_chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(50),
-                ])
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(chunks[1]);
-            
+
             let delete_button = Paragraph::new("[ Delete ] (Enter/y)")
                 .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                 .alignment(ratatui::layout::Alignment::Center)
                 .block(Block::default().borders(Borders::ALL));
-            
+
             let cancel_button = Paragraph::new("[ Cancel ] (ESC/n)")
                 .style(Style::default().fg(Color::Green))
                 .alignment(ratatui::layout::Alignment::Center)
                 .block(Block::default().borders(Borders::ALL));
-            
+
             f.render_widget(delete_button, button_chunks[0]);
             f.render_widget(cancel_button, button_chunks[1]);
         }
@@ -555,18 +622,18 @@ fn draw_delete_confirm_dialog(f: &mut Frame, app: &App) {
 
 fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(80, 75, f.area());
-    
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Length(3),  // Description
-            Constraint::Length(3),  // Tags
-            Constraint::Length(3),  // Estimate
-            Constraint::Min(5),     // Note (multiline)
-            Constraint::Length(3),  // Buttons
-            Constraint::Length(2),  // Info
+            Constraint::Length(3), // Title
+            Constraint::Length(3), // Description
+            Constraint::Length(3), // Tags
+            Constraint::Length(3), // Estimate
+            Constraint::Min(5),    // Note (multiline)
+            Constraint::Length(3), // Buttons
+            Constraint::Length(2), // Info
         ])
         .split(area);
 
@@ -588,7 +655,9 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
 
     for (label, value, field_idx, chunk_idx) in single_line_fields.iter() {
         let style = if app.input_state.current_field == *field_idx {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
@@ -596,13 +665,15 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         let input = Paragraph::new(format!("{}: {}", label, value))
             .style(style)
             .block(Block::default().borders(Borders::ALL));
-        
+
         f.render_widget(input, chunks[*chunk_idx]);
     }
 
     // Multiline note field
     let note_style = if app.input_state.current_field == 4 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
     };
@@ -617,16 +688,13 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         .style(note_style)
         .wrap(Wrap { trim: false })
         .block(Block::default().borders(Borders::ALL));
-    
+
     f.render_widget(note_input, chunks[4]);
 
     // Buttons
     let button_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(chunks[5]);
 
     let save_style = if app.input_state.current_field == 5 {
@@ -651,7 +719,7 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         .style(save_style)
         .alignment(ratatui::layout::Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
-    
+
     let cancel_button = Paragraph::new("[ Cancel ]")
         .style(cancel_style)
         .alignment(ratatui::layout::Alignment::Center)
@@ -666,25 +734,28 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     } else {
         "Will be added as top-level task"
     };
-    let help = Paragraph::new(format!("↑/↓/Tab:Navigate | Enter:Select button or new line | Ctrl+Enter:Save | ESC:Cancel\n{}", parent_info))
-        .style(Style::default().fg(Color::DarkGray));
+    let help = Paragraph::new(format!(
+        "↑/↓/Tab:Navigate | Enter:Select button or new line | Ctrl+Enter:Save | ESC:Cancel\n{}",
+        parent_info
+    ))
+    .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[6]);
 }
 
 fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
     let area = centered_rect(80, 75, f.area());
-    
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
         .constraints([
-            Constraint::Length(3),  // Title
-            Constraint::Length(3),  // Description
-            Constraint::Length(3),  // Tags
-            Constraint::Length(3),  // Estimate
-            Constraint::Min(5),     // Note (multiline)
-            Constraint::Length(3),  // Buttons
-            Constraint::Length(2),  // Info
+            Constraint::Length(3), // Title
+            Constraint::Length(3), // Description
+            Constraint::Length(3), // Tags
+            Constraint::Length(3), // Estimate
+            Constraint::Min(5),    // Note (multiline)
+            Constraint::Length(3), // Buttons
+            Constraint::Length(2), // Info
         ])
         .split(area);
 
@@ -706,7 +777,9 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
 
     for (label, value, field_idx, chunk_idx) in single_line_fields.iter() {
         let style = if app.input_state.current_field == *field_idx {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
@@ -714,13 +787,15 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         let input = Paragraph::new(format!("{}: {}", label, value))
             .style(style)
             .block(Block::default().borders(Borders::ALL));
-        
+
         f.render_widget(input, chunks[*chunk_idx]);
     }
 
     // Multiline note field
     let note_style = if app.input_state.current_field == 4 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
     };
@@ -735,16 +810,13 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         .style(note_style)
         .wrap(Wrap { trim: false })
         .block(Block::default().borders(Borders::ALL));
-    
+
     f.render_widget(note_input, chunks[4]);
 
     // Buttons
     let button_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(chunks[5]);
 
     let save_style = if app.input_state.current_field == 5 {
@@ -769,7 +841,7 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         .style(save_style)
         .alignment(ratatui::layout::Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
-    
+
     let cancel_button = Paragraph::new("[ Cancel ]")
         .style(cancel_style)
         .alignment(ratatui::layout::Alignment::Center)
@@ -783,4 +855,3 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[6]);
 }
-
