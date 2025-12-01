@@ -193,9 +193,6 @@ pub fn show_task(id: String) -> Result<()> {
         println!("Description: {}", task.description);
     }
 
-    if let Some(ref assignee) = task.assigned_to {
-        println!("Assignee:    @{}", assignee);
-    }
 
     if !task.tags.is_empty() {
         println!(
@@ -267,7 +264,6 @@ pub fn update_task(
     description: Option<String>,
     estimate: Option<String>,
     eta: Option<String>,
-    assignee: Option<String>,
 ) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
@@ -295,11 +291,6 @@ pub fn update_task(
 
         if let Some(eta_str) = eta {
             task.eta = Some(parse_date(&eta_str)?);
-            updated = true;
-        }
-
-        if let Some(new_assignee) = assignee {
-            task.assigned_to = Some(new_assignee);
             updated = true;
         }
 

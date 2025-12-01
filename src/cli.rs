@@ -32,10 +32,6 @@ pub enum Commands {
         #[arg(long)]
         eta: Option<String>,
 
-        /// Assignee name
-        #[arg(short, long)]
-        assignee: Option<String>,
-
         /// Task description
         #[arg(short, long)]
         description: Option<String>,
@@ -74,10 +70,6 @@ pub enum Commands {
         /// Filter by tag
         #[arg(short, long)]
         tag: Option<String>,
-
-        /// Filter by assignee
-        #[arg(short, long)]
-        assignee: Option<String>,
     },
 
     /// Show detailed information about a task
@@ -87,11 +79,7 @@ pub enum Commands {
     },
 
     /// Display task tree
-    Tree {
-        /// Filter by assignee
-        #[arg(short, long)]
-        assignee: Option<String>,
-    },
+    Tree,
 
     /// Update task fields
     Update {
@@ -113,10 +101,6 @@ pub enum Commands {
         /// New ETA (YYYY-MM-DD)
         #[arg(long)]
         eta: Option<String>,
-
-        /// New assignee
-        #[arg(long)]
-        assignee: Option<String>,
     },
 
     /// Delete a task
@@ -149,10 +133,6 @@ pub enum Commands {
         /// Specific date (YYYY-MM-DD, or "today", "yesterday", "this week", etc.)
         #[arg(short, long)]
         date: Option<String>,
-
-        /// Filter by assignee
-        #[arg(short, long)]
-        assignee: Option<String>,
     },
 
     /// Show statistics
@@ -164,10 +144,6 @@ pub enum Commands {
         /// Specific date (YYYY-MM-DD, or "today", "yesterday", "this week", etc.)
         #[arg(short, long)]
         date: Option<String>,
-
-        /// Filter by assignee
-        #[arg(short, long)]
-        assignee: Option<String>,
     },
 
     /// Launch interactive TUI

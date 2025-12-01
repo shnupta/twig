@@ -67,14 +67,9 @@ fn format_tree_node(node: &TreeNode, prefix: &str, is_last: bool, lines: &mut Ve
         String::new()
     };
 
-    let assignee_info = if let Some(assignee) = &node.task.assigned_to {
-        format!(" @{}", assignee)
-    } else {
-        String::new()
-    };
 
     lines.push(format!(
-        "{}{} {} {} [{}]{}{}{}{}",
+        "{}{} {} {} [{}]{}{}{}",
         prefix,
         connector,
         status_icon,
@@ -82,7 +77,6 @@ fn format_tree_node(node: &TreeNode, prefix: &str, is_last: bool, lines: &mut Ve
         node.task.short_id(),
         time_info,
         estimate_info,
-        assignee_info,
         tags_info
     ));
 
@@ -97,7 +91,6 @@ pub fn filter_tasks<'a>(
     tasks: &'a [Task],
     status: Option<TaskStatus>,
     tag: Option<&str>,
-    assignee: Option<&str>,
 ) -> Vec<&'a Task> {
     tasks
         .iter()
@@ -109,11 +102,6 @@ pub fn filter_tasks<'a>(
             }
             if let Some(t) = tag {
                 if !task.tags.iter().any(|tag| tag == t) {
-                    return false;
-                }
-            }
-            if let Some(a) = assignee {
-                if task.assigned_to.as_deref() != Some(a) {
                     return false;
                 }
             }

@@ -8,7 +8,6 @@ use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
 pub fn generate_report(
     period: ReportPeriod,
     date: Option<String>,
-    assignee: Option<String>,
 ) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
@@ -30,19 +29,9 @@ pub fn generate_report(
         ReportPeriod::Monthly => "Monthly",
     });
     println!("Period: {} to {}", format_date(&start), format_date(&end));
-    if let Some(ref a) = assignee {
-        println!("Assignee: @{}", a);
-    }
     println!("{}", "=".repeat(60));
 
-    let tasks = storage.get_all_tasks();
-    
-    // Filter by assignee
-    let tasks: Vec<&Task> = if let Some(ref a) = assignee {
-        tasks.iter().filter(|t| t.assigned_to.as_deref() == Some(a)).collect()
-    } else {
-        tasks.iter().collect()
-    };
+    let tasks: Vec<&Task> = storage.get_all_tasks().iter().collect();
 
     // Tasks created in period
     let created: Vec<&Task> = tasks
@@ -162,20 +151,12 @@ pub fn generate_report(
 pub fn show_stats(
     period: Option<StatsPeriod>,
     date: Option<String>,
-    assignee: Option<String>,
 ) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let tasks = storage.get_all_tasks();
-
-    // Filter by assignee
-    let tasks: Vec<&Task> = if let Some(ref a) = assignee {
-        tasks.iter().filter(|t| t.assigned_to.as_deref() == Some(a)).collect()
-    } else {
-        tasks.iter().collect()
-    };
+    let tasks: Vec<&Task> = storage.get_all_tasks().iter().collect();
 
     // If period and date specified, filter by date range
     let (tasks, period_info): (Vec<&Task>, Option<String>) = if let Some(p) = period {
@@ -208,9 +189,6 @@ pub fn show_stats(
     };
 
     println!("\nStatistics");
-    if let Some(ref a) = assignee {
-        println!("Assignee: @{}", a);
-    }
     if let Some(ref info) = period_info {
         println!("Period: {}", info);
     }

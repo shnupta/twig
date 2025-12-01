@@ -1,5 +1,5 @@
 use crate::models::TaskStatus;
-use crate::tui::app::{App, AppMode};
+use crate::tui::app::{App, AppMode, ViewTab};
 use crate::utils::format_datetime;
 use chrono::Utc;
 use ratatui::{
@@ -37,7 +37,7 @@ fn draw_main_view(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
+            Constraint::Length(5),  // Header (taller for tabs)
             Constraint::Min(0),     // Main content
             Constraint::Length(3),  // Footer
         ])
@@ -67,10 +67,32 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     
     let filter_text = filters.join(" | ");
     
+    // Build tab bar
+    let mut tab_spans = vec![
+        Span::raw("[1] "),
+        if matches!(app.view_tab, ViewTab::MyTasks) {
+            Span::styled("My Tasks", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD | Modifier::UNDERLINED))
+        } else {
+            Span::styled("My Tasks", Style::default())
+        },
+    ];
+    
+    if !app.reportees.is_empty() {
+        tab_spans.push(Span::raw("  [2] "));
+        if matches!(app.view_tab, ViewTab::AllReportees) {
+            tab_spans.push(Span::styled("Reportees", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)));
+        } else {
+            tab_spans.push(Span::styled("Reportees", Style::default()));
+        }
+    }
+    
+    tab_spans.push(Span::styled("  (1/2 to switch)", Style::default().fg(Color::DarkGray)));
+    
     let header = Paragraph::new(vec![
         Line::from(vec![
             Span::styled("twig", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         ]),
+        Line::from(tab_spans),
         Line::from(filter_text),
     ])
     .block(Block::default().borders(Borders::ALL));
@@ -84,7 +106,7 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
     let items: Vec<ListItem> = tasks
         .iter()
         .enumerate()
-        .map(|(i, (task, depth))| {
+        .map(|(i, (task, depth, owner))| {
             let status_icon = match task.status {
                 TaskStatus::NotStarted => "○",
                 TaskStatus::InProgress => "◐",
@@ -99,8 +121,15 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
                 TaskStatus::Cancelled => Color::Red,
             };
 
+            // Owner indicator (in reportee view)
+            let owner_prefix = if matches!(app.view_tab, ViewTab::AllReportees) && *owner != "me" {
+                format!("[@{}] ", owner)
+            } else {
+                String::new()
+            };
+            
             // Expand/collapse indicator
-            let expand_indicator = if app.has_children(task.id) {
+            let expand_indicator = if app.has_children(task.id, owner) {
                 if app.is_expanded(task.id) {
                     "▼ "
                 } else {
@@ -126,7 +155,8 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
             let indent = "  ".repeat(*depth);
 
             let base_content = format!(
-                "{}{}{} {} [{}]",
+                "{}{}{}{} {} [{}]",
+                owner_prefix,
                 indent,
                 expand_indicator,
                 status_icon,
@@ -174,7 +204,7 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
-    if let Some(task) = app.get_selected_task() {
+    if let Some((task, owner)) = app.get_selected_task() {
         let mut lines = vec![
             Line::from(vec![
                 Span::styled("Title: ", Style::default().add_modifier(Modifier::BOLD)),
@@ -229,12 +259,6 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
             }
         }
 
-        if let Some(ref assignee) = task.assigned_to {
-            lines.push(Line::from(vec![
-                Span::styled("Assignee: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(format!("@{}", assignee)),
-            ]));
-        }
 
         if let Some(estimate) = task.get_formatted_estimate() {
             lines.push(Line::from(vec![
@@ -297,7 +321,8 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
             ]));
         }
 
-        let children = app.storage.get_children(task.id);
+        let storage = app.get_storage_for_owner(owner);
+        let children = storage.get_children(task.id);
         if !children.is_empty() {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
@@ -335,7 +360,7 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let help_text = match app.mode {
         AppMode::Normal => {
-            "j/k:↓↑ | Tab/Enter:Expand | s:Start | c:Complete | x:Cancel | p:Pause | a:Add subtask | A:Add top-level | e:Edit | d:Delete | h:Toggle Completed | ?:Help | q:Quit"
+            "j/k:↓↑ | Tab/Enter:Expand | ←/→:Tabs | 1-5:Switch tab | s:Start | c:Complete | x:Cancel | p:Pause | a:Add subtask | A:Add top-level | e:Edit | d:Delete | ?:Help | q:Quit"
         }
         AppMode::Help => "Press ? or ESC to close help",
         AppMode::Filter => "ESC:Cancel",
@@ -364,6 +389,8 @@ fn draw_help(f: &mut Frame) {
         Line::from("  j / ↓            - Move down"),
         Line::from("  k / ↑            - Move up"),
         Line::from("  Enter/Space/Tab  - Expand/collapse task (shows/hides subtasks)"),
+        Line::from("  ← / →            - Switch tabs (My Tasks / Reportees)"),
+        Line::from("  1-5              - Jump to specific tab"),
         Line::from(""),
         Line::from(vec![
             Span::styled("Task Management", Style::default().add_modifier(Modifier::BOLD)),
@@ -441,13 +468,14 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 fn draw_delete_confirm_dialog(f: &mut Frame, app: &App) {
     if let Some(task_id) = app.editing_task_id {
-        if let Some(task) = app.get_task_by_id(task_id) {
+        if let Some((task, owner)) = app.get_task_by_id_with_owner(task_id) {
             let area = centered_rect(60, 30, f.area());
             
             // Clear background
             f.render_widget(ratatui::widgets::Clear, area);
             
-            let children = app.storage.get_children(task_id);
+            let storage = app.get_storage_for_owner(owner);
+            let children = storage.get_children(task_id);
             let has_subtasks = !children.is_empty();
             
             let warning_text = if has_subtasks {
@@ -523,7 +551,6 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
             Constraint::Length(3),  // Description
             Constraint::Length(3),  // Tags
             Constraint::Length(3),  // Estimate
-            Constraint::Length(3),  // Assignee
             Constraint::Min(5),     // Note (multiline)
             Constraint::Length(3),  // Buttons
             Constraint::Length(2),  // Info
@@ -544,7 +571,6 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         ("Description", &app.input_state.description, 1, 1),
         ("Tags (comma-separated)", &app.input_state.tags, 2, 2),
         ("Estimate (1h/2d/3w/2m)", &app.input_state.estimate, 3, 3),
-        ("Assignee", &app.input_state.assignee, 4, 4),
     ];
 
     for (label, value, field_idx, chunk_idx) in single_line_fields.iter() {
@@ -562,7 +588,7 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     }
 
     // Multiline note field
-    let note_style = if app.input_state.current_field == 5 {
+    let note_style = if app.input_state.current_field == 4 {
         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
     } else {
         Style::default()
@@ -579,7 +605,7 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         .wrap(Wrap { trim: false })
         .block(Block::default().borders(Borders::ALL));
     
-    f.render_widget(note_input, chunks[5]);
+    f.render_widget(note_input, chunks[4]);
 
     // Buttons
     let button_chunks = Layout::default()
@@ -588,9 +614,9 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
             Constraint::Percentage(50),
             Constraint::Percentage(50),
         ])
-        .split(chunks[6]);
+        .split(chunks[5]);
 
-    let save_style = if app.input_state.current_field == 6 {
+    let save_style = if app.input_state.current_field == 5 {
         Style::default()
             .fg(Color::Black)
             .bg(Color::Green)
@@ -599,7 +625,7 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
         Style::default().fg(Color::Green)
     };
 
-    let cancel_style = if app.input_state.current_field == 7 {
+    let cancel_style = if app.input_state.current_field == 6 {
         Style::default()
             .fg(Color::Black)
             .bg(Color::Red)
@@ -629,7 +655,7 @@ fn draw_add_task_dialog(f: &mut Frame, app: &App) {
     };
     let help = Paragraph::new(format!("↑/↓/Tab:Navigate | Enter:Select button or new line | Ctrl+Enter:Save | ESC:Cancel\n{}", parent_info))
         .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[7]);
+    f.render_widget(help, chunks[6]);
 }
 
 fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
@@ -643,7 +669,6 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
             Constraint::Length(3),  // Description
             Constraint::Length(3),  // Tags
             Constraint::Length(3),  // Estimate
-            Constraint::Length(3),  // Assignee
             Constraint::Min(5),     // Note (multiline)
             Constraint::Length(3),  // Buttons
             Constraint::Length(2),  // Info
@@ -664,7 +689,6 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         ("Description", &app.input_state.description, 1, 1),
         ("Tags (comma-separated)", &app.input_state.tags, 2, 2),
         ("Estimate (1h/2d/3w/2m)", &app.input_state.estimate, 3, 3),
-        ("Assignee", &app.input_state.assignee, 4, 4),
     ];
 
     for (label, value, field_idx, chunk_idx) in single_line_fields.iter() {
@@ -682,7 +706,7 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
     }
 
     // Multiline note field
-    let note_style = if app.input_state.current_field == 5 {
+    let note_style = if app.input_state.current_field == 4 {
         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
     } else {
         Style::default()
@@ -699,7 +723,7 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         .wrap(Wrap { trim: false })
         .block(Block::default().borders(Borders::ALL));
     
-    f.render_widget(note_input, chunks[5]);
+    f.render_widget(note_input, chunks[4]);
 
     // Buttons
     let button_chunks = Layout::default()
@@ -708,9 +732,9 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
             Constraint::Percentage(50),
             Constraint::Percentage(50),
         ])
-        .split(chunks[6]);
+        .split(chunks[5]);
 
-    let save_style = if app.input_state.current_field == 6 {
+    let save_style = if app.input_state.current_field == 5 {
         Style::default()
             .fg(Color::Black)
             .bg(Color::Green)
@@ -719,7 +743,7 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
         Style::default().fg(Color::Green)
     };
 
-    let cancel_style = if app.input_state.current_field == 7 {
+    let cancel_style = if app.input_state.current_field == 6 {
         Style::default()
             .fg(Color::Black)
             .bg(Color::Red)
@@ -744,6 +768,6 @@ fn draw_edit_task_dialog(f: &mut Frame, app: &App) {
     // Help text
     let help = Paragraph::new("↑/↓/Tab:Navigate | Enter:Select button or new line (in note) | Ctrl+Enter:Save | ESC:Cancel")
         .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[7]);
+    f.render_widget(help, chunks[6]);
 }
 

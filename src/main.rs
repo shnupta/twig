@@ -25,10 +25,9 @@ fn main() -> Result<()> {
             tags,
             estimate,
             eta,
-            assignee,
             description,
         }) => {
-            commands::add_task(title, parent, tags, estimate, eta, assignee, description)?;
+            commands::add_task(title, parent, tags, estimate, eta, description)?;
         }
         Some(Commands::Start { id }) => {
             commands::start_task(id)?;
@@ -45,15 +44,14 @@ fn main() -> Result<()> {
         Some(Commands::List {
             status,
             tag,
-            assignee,
         }) => {
-            commands::list_tasks(status, tag, assignee)?;
+            commands::list_tasks(status, tag)?;
         }
         Some(Commands::Show { id }) => {
             commands::show_task(id)?;
         }
-        Some(Commands::Tree { assignee }) => {
-            commands::show_tree(assignee)?;
+        Some(Commands::Tree) => {
+            commands::show_tree()?;
         }
         Some(Commands::Update {
             id,
@@ -61,9 +59,8 @@ fn main() -> Result<()> {
             description,
             estimate,
             eta,
-            assignee,
         }) => {
-            commands::update_task(id, title, description, estimate, eta, assignee)?;
+            commands::update_task(id, title, description, estimate, eta)?;
         }
         Some(Commands::Delete { id }) => {
             commands::delete_task(id)?;
@@ -85,16 +82,14 @@ fn main() -> Result<()> {
         Some(Commands::Report {
             period,
             date,
-            assignee,
         }) => {
-            commands::generate_report(period, date, assignee)?;
+            commands::generate_report(period, date)?;
         }
         Some(Commands::Stats {
             period,
             date,
-            assignee,
         }) => {
-            commands::show_stats(period, date, assignee)?;
+            commands::show_stats(period, date)?;
         }
         Some(Commands::Tui) => {
             tui::run_tui()?;

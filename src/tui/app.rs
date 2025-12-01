@@ -24,14 +24,13 @@ pub struct InputState {
     pub description: String,
     pub tags: String,
     pub estimate: String,
-    pub assignee: String,
     pub note: String,
     pub current_field: usize,
 }
 
 pub enum ViewTab {
     MyTasks,
-    Reportee(String),
+    AllReportees,
 }
 
 pub struct App {
@@ -40,15 +39,16 @@ pub struct App {
     pub scroll_offset: usize,
     pub mode: AppMode,
     pub view_tab: ViewTab,
+    pub reportees: Vec<String>,
+    pub reportee_storages: std::collections::HashMap<String, Storage>,
     pub show_completed: bool,
     pub show_cancelled: bool,
     pub filter_tag: Option<String>,
-    pub filter_assignee: Option<String>,
     pub expanded_tasks: Vec<uuid::Uuid>,
     pub should_quit: bool,
     pub input_state: InputState,
     pub editing_task_id: Option<uuid::Uuid>,
-    pub visible_task_list: Vec<uuid::Uuid>, // Flat list of visible tasks in tree order
+    pub visible_task_list: Vec<(uuid::Uuid, String)>, // (task_id, owner_name) - owner is "me" or reportee name
 }
 
 impl App {
@@ -57,16 +57,30 @@ impl App {
         let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
         storage.load()?;
 
+        // Load reportees
+        let config = crate::storage::json_store::load_config(&paths.config_file())?;
+        let reportees = config.reportees.clone();
+        
+        // Load reportee storages
+        let mut reportee_storages = std::collections::HashMap::new();
+        for reportee in &reportees {
+            let reportee_path = paths.reportee_tasks_file(reportee);
+            let mut reportee_storage = Storage::new(reportee_path.to_string_lossy().to_string());
+            let _ = reportee_storage.load(); // Ignore errors for now
+            reportee_storages.insert(reportee.clone(), reportee_storage);
+        }
+
         Ok(Self {
             storage,
             selected_index: 0,
             scroll_offset: 0,
             mode: AppMode::Normal,
             view_tab: ViewTab::MyTasks,
+            reportees,
+            reportee_storages,
             show_completed: true,
             show_cancelled: false,
             filter_tag: None,
-            filter_assignee: None,
             expanded_tasks: Vec::new(),
             should_quit: false,
             input_state: InputState {
@@ -74,7 +88,6 @@ impl App {
                 description: String::new(),
                 tags: String::new(),
                 estimate: String::new(),
-                assignee: String::new(),
                 note: String::new(),
                 current_field: 0,
             },
@@ -82,33 +95,72 @@ impl App {
             visible_task_list: Vec::new(),
         })
     }
+    
+    pub fn switch_tab(&mut self) {
+        self.view_tab = match &self.view_tab {
+            ViewTab::MyTasks => {
+                if self.reportees.is_empty() {
+                    ViewTab::MyTasks
+                } else {
+                    ViewTab::AllReportees
+                }
+            }
+            ViewTab::AllReportees => ViewTab::MyTasks,
+        };
+        self.selected_index = 0;
+        self.rebuild_visible_task_list();
+    }
 
     pub fn rebuild_visible_task_list(&mut self) {
         self.visible_task_list.clear();
-        let root_task_ids: Vec<uuid::Uuid> = self.storage.get_root_tasks()
-            .into_iter()
-            .filter(|t| self.should_show_task(t))
-            .map(|t| t.id)
-            .collect();
         
-        for root_id in root_task_ids {
-            self.add_task_to_visible_list(root_id, 0);
+        match &self.view_tab {
+            ViewTab::MyTasks => {
+                let root_task_ids: Vec<uuid::Uuid> = self.storage.get_root_tasks()
+                    .into_iter()
+                    .filter(|t| self.should_show_task(t))
+                    .map(|t| t.id)
+                    .collect();
+                
+                for root_id in root_task_ids {
+                    self.add_task_to_visible_list(root_id, "me".to_string());
+                }
+            }
+            ViewTab::AllReportees => {
+                let reportees = self.reportees.clone();
+                for reportee in &reportees {
+                    let root_task_ids: Vec<uuid::Uuid> = if let Some(storage) = self.reportee_storages.get(reportee) {
+                        storage.get_root_tasks()
+                            .into_iter()
+                            .filter(|t| self.should_show_task(t))
+                            .map(|t| t.id)
+                            .collect()
+                    } else {
+                        vec![]
+                    };
+                    
+                    for root_id in root_task_ids {
+                        self.add_task_to_visible_list(root_id, reportee.clone());
+                    }
+                }
+            }
         }
     }
 
-    fn add_task_to_visible_list(&mut self, task_id: uuid::Uuid, _depth: usize) {
-        self.visible_task_list.push(task_id);
+    fn add_task_to_visible_list(&mut self, task_id: uuid::Uuid, owner: String) {
+        self.visible_task_list.push((task_id, owner.clone()));
         
         // If task is expanded, add its children
         if self.expanded_tasks.contains(&task_id) {
-            let child_ids: Vec<uuid::Uuid> = self.storage.get_children(task_id)
+            let storage = self.get_storage_for_owner(&owner);
+            let child_ids: Vec<uuid::Uuid> = storage.get_children(task_id)
                 .into_iter()
                 .filter(|c| self.should_show_task(c))
                 .map(|c| c.id)
                 .collect();
                 
             for child_id in child_ids {
-                self.add_task_to_visible_list(child_id, _depth + 1);
+                self.add_task_to_visible_list(child_id, owner.clone());
             }
         }
     }
@@ -125,31 +177,27 @@ impl App {
                 return false;
             }
         }
-        if let Some(ref assignee) = self.filter_assignee {
-            if task.assigned_to.as_deref() != Some(assignee) {
-                return false;
-            }
-        }
         true
     }
 
-    pub fn get_visible_tasks(&self) -> Vec<(&Task, usize)> {
+    pub fn get_visible_tasks(&self) -> Vec<(&Task, usize, &str)> {
         let mut result = Vec::new();
-        for task_id in &self.visible_task_list {
-            if let Some(task) = self.storage.get_task(*task_id) {
-                let depth = self.get_task_depth(task);
-                result.push((task, depth));
+        for (task_id, owner) in &self.visible_task_list {
+            let storage = self.get_storage_for_owner(owner);
+            if let Some(task) = storage.get_task(*task_id) {
+                let depth = self.get_task_depth(task, storage);
+                result.push((task, depth, owner.as_str()));
             }
         }
         result
     }
 
-    fn get_task_depth(&self, task: &Task) -> usize {
+    fn get_task_depth(&self, task: &Task, storage: &Storage) -> usize {
         let mut depth = 0;
         let mut current_id = task.parent_id;
         while let Some(id) = current_id {
             depth += 1;
-            if let Some(parent) = self.storage.get_task(id) {
+            if let Some(parent) = storage.get_task(id) {
                 current_id = parent.parent_id;
             } else {
                 break;
@@ -158,17 +206,35 @@ impl App {
         depth
     }
 
-    pub fn get_selected_task(&self) -> Option<&Task> {
+    pub fn get_selected_task(&self) -> Option<(&Task, &str)> {
         if self.selected_index < self.visible_task_list.len() {
-            let task_id = self.visible_task_list[self.selected_index];
-            self.storage.get_task(task_id)
+            let (task_id, owner) = &self.visible_task_list[self.selected_index];
+            let storage = self.get_storage_for_owner(owner);
+            storage.get_task(*task_id).map(|t| (t, owner.as_str()))
         } else {
             None
         }
     }
 
-    pub fn has_children(&self, task_id: uuid::Uuid) -> bool {
-        !self.storage.get_children(task_id).is_empty()
+    pub fn get_storage_for_owner(&self, owner: &str) -> &Storage {
+        if owner == "me" {
+            &self.storage
+        } else {
+            self.reportee_storages.get(owner).unwrap_or(&self.storage)
+        }
+    }
+
+    fn get_storage_for_owner_mut(&mut self, owner: &str) -> &mut Storage {
+        if owner == "me" {
+            &mut self.storage
+        } else {
+            self.reportee_storages.get_mut(owner).unwrap()
+        }
+    }
+
+    pub fn has_children(&self, task_id: uuid::Uuid, owner: &str) -> bool {
+        let storage = self.get_storage_for_owner(owner);
+        !storage.get_children(task_id).is_empty()
     }
 
     pub fn is_expanded(&self, task_id: uuid::Uuid) -> bool {
@@ -188,9 +254,9 @@ impl App {
     }
 
     pub fn toggle_expand(&mut self) {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, owner)) = self.get_selected_task() {
             let id = task.id;
-            if !self.has_children(id) {
+            if !self.has_children(id, owner) {
                 return; // No children to expand
             }
             
@@ -219,13 +285,12 @@ impl App {
             description: String::new(),
             tags: String::new(),
             estimate: String::new(),
-            assignee: String::new(),
             note: String::new(),
             current_field: 0,
         };
         // Store whether this should be a subtask or top-level
         self.editing_task_id = if as_subtask {
-            self.get_selected_task().map(|t| t.id)
+            self.get_selected_task().map(|(t, _)| t.id)
         } else {
             None
         };
@@ -233,13 +298,12 @@ impl App {
     }
 
     pub fn start_edit_task(&mut self) {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, _owner)) = self.get_selected_task() {
             let task_id = task.id;
             let title = task.title.clone();
             let description = task.description.clone();
             let tags = task.tags.join(", ");
             let estimate = task.get_formatted_estimate().unwrap_or_default();
-            let assignee = task.assigned_to.clone().unwrap_or_default();
             let notes = task.notes.clone();
             
             self.editing_task_id = Some(task_id);
@@ -248,7 +312,6 @@ impl App {
                 description,
                 tags,
                 estimate,
-                assignee,
                 note: notes,
                 current_field: 0,
             };
@@ -268,10 +331,6 @@ impl App {
             let _ = task.set_estimate(&self.input_state.estimate);
         }
         
-        if !self.input_state.assignee.is_empty() {
-            task.assigned_to = Some(self.input_state.assignee.clone());
-        }
-        
         task.notes = self.input_state.note.clone();
         
         // Set parent based on editing_task_id (which stores the parent for new tasks)
@@ -279,7 +338,24 @@ impl App {
             task.parent_id = Some(parent_id);
         }
         
-        self.storage.add_task(task)?;
+        // Determine which storage to add to
+        let owner: String = match &self.view_tab {
+            ViewTab::MyTasks => "me".to_string(),
+            ViewTab::AllReportees => {
+                // If adding as subtask, use parent's owner
+                if let Some(parent_id) = self.editing_task_id {
+                    self.visible_task_list.iter()
+                        .find(|(id, _)| *id == parent_id)
+                        .map(|(_, o)| o.clone())
+                        .unwrap_or_else(|| "me".to_string())
+                } else {
+                    "me".to_string() // Default to me if no parent
+                }
+            }
+        };
+        
+        let storage = self.get_storage_for_owner_mut(&owner);
+        storage.add_task(task)?;
         self.rebuild_visible_task_list();
         self.editing_task_id = None;
         self.mode = AppMode::Normal;
@@ -288,31 +364,40 @@ impl App {
 
     pub fn save_edit_task(&mut self) -> Result<()> {
         if let Some(task_id) = self.editing_task_id {
-            if let Some(task) = self.storage.get_task_mut(task_id) {
-                task.title = self.input_state.title.clone();
-                task.description = self.input_state.description.clone();
-                
-                if !self.input_state.tags.is_empty() {
-                    task.tags = self.input_state.tags.split(',').map(|s| s.trim().to_string()).collect();
-                } else {
-                    task.tags.clear();
+            // Clone all the input data first
+            let title = self.input_state.title.clone();
+            let description = self.input_state.description.clone();
+            let tags = self.input_state.tags.clone();
+            let estimate = self.input_state.estimate.clone();
+            let notes = self.input_state.note.clone();
+            
+            // Get the owner from visible list
+            let owner = self.visible_task_list.iter()
+                .find(|(id, _)| *id == task_id)
+                .map(|(_, o)| o.clone())
+                .unwrap_or_else(|| "me".to_string());
+            
+            {
+                let storage = self.get_storage_for_owner_mut(&owner);
+                if let Some(task) = storage.get_task_mut(task_id) {
+                    task.title = title;
+                    task.description = description;
+                    
+                    if !tags.is_empty() {
+                        task.tags = tags.split(',').map(|s| s.trim().to_string()).collect();
+                    } else {
+                        task.tags.clear();
+                    }
+                    
+                    if !estimate.is_empty() {
+                        let _ = task.set_estimate(&estimate);
+                    } else {
+                        task.estimated_effort_hours = None;
+                    }
+                    
+                    task.notes = notes;
                 }
-                
-                if !self.input_state.estimate.is_empty() {
-                    let _ = task.set_estimate(&self.input_state.estimate);
-                } else {
-                    task.estimated_effort_hours = None;
-                }
-                
-                if !self.input_state.assignee.is_empty() {
-                    task.assigned_to = Some(self.input_state.assignee.clone());
-                } else {
-                    task.assigned_to = None;
-                }
-                
-                task.notes = self.input_state.note.clone();
-                
-                self.storage.save()?;
+                storage.save()?;
             }
         }
         self.editing_task_id = None;
@@ -326,7 +411,7 @@ impl App {
     }
 
     pub fn start_delete_task(&mut self) {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, _owner)) = self.get_selected_task() {
             self.editing_task_id = Some(task.id);
             self.mode = AppMode::DeleteConfirm;
         }
@@ -334,7 +419,13 @@ impl App {
 
     pub fn confirm_delete_task(&mut self) -> Result<()> {
         if let Some(task_id) = self.editing_task_id {
-            self.storage.delete_task(task_id)?;
+            // Find owner
+            let owner = self.visible_task_list.iter()
+                .find(|(id, _)| *id == task_id)
+                .map(|(_, o)| o.clone())
+                .unwrap_or_else(|| "me".to_string());
+            
+            self.get_storage_for_owner_mut(&owner).delete_task(task_id)?;
             self.rebuild_visible_task_list();
             // Adjust selection if needed
             if self.selected_index >= self.visible_task_list.len() && self.selected_index > 0 {
@@ -346,51 +437,84 @@ impl App {
         Ok(())
     }
 
-    pub fn get_task_by_id(&self, id: uuid::Uuid) -> Option<&Task> {
-        self.storage.get_task(id)
+    pub fn get_task_by_id_with_owner(&self, id: uuid::Uuid) -> Option<(&Task, &str)> {
+        // Try to find in visible list first
+        if let Some((_, owner)) = self.visible_task_list.iter().find(|(tid, _)| *tid == id) {
+            let storage = self.get_storage_for_owner(owner);
+            return storage.get_task(id).map(|t| (t, owner.as_str()));
+        }
+        
+        // Fallback: search all storages
+        if let Some(task) = self.storage.get_task(id) {
+            return Some((task, "me"));
+        }
+        
+        for (name, storage) in &self.reportee_storages {
+            if let Some(task) = storage.get_task(id) {
+                return Some((task, name.as_str()));
+            }
+        }
+        
+        None
     }
 
     pub fn start_selected_task(&mut self) -> Result<()> {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, owner)) = self.get_selected_task() {
             let task_id = task.id;
-            if let Some(task_mut) = self.storage.get_task_mut(task_id) {
-                task_mut.start();
-                self.storage.save()?;
+            let owner = owner.to_string();
+            {
+                let storage = self.get_storage_for_owner_mut(&owner);
+                if let Some(task_mut) = storage.get_task_mut(task_id) {
+                    task_mut.start();
+                }
+                storage.save()?;
             }
         }
         Ok(())
     }
 
     pub fn complete_selected_task(&mut self) -> Result<()> {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, owner)) = self.get_selected_task() {
             let task_id = task.id;
-            if let Some(task_mut) = self.storage.get_task_mut(task_id) {
-                task_mut.complete();
-                self.storage.save()?;
+            let owner = owner.to_string();
+            {
+                let storage = self.get_storage_for_owner_mut(&owner);
+                if let Some(task_mut) = storage.get_task_mut(task_id) {
+                    task_mut.complete();
+                }
+                storage.save()?;
             }
         }
         Ok(())
     }
 
     pub fn cancel_selected_task(&mut self) -> Result<()> {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, owner)) = self.get_selected_task() {
             let task_id = task.id;
-            if let Some(task_mut) = self.storage.get_task_mut(task_id) {
-                task_mut.cancel();
-                self.storage.save()?;
+            let owner = owner.to_string();
+            {
+                let storage = self.get_storage_for_owner_mut(&owner);
+                if let Some(task_mut) = storage.get_task_mut(task_id) {
+                    task_mut.cancel();
+                }
+                storage.save()?;
             }
         }
         Ok(())
     }
 
     pub fn pause_selected_task(&mut self) -> Result<()> {
-        if let Some(task) = self.get_selected_task() {
+        if let Some((task, owner)) = self.get_selected_task() {
             let task_id = task.id;
-            if let Some(task_mut) = self.storage.get_task_mut(task_id) {
-                if task_mut.has_active_time_entry() {
-                    task_mut.pause();
-                    self.storage.save()?;
+            let owner = owner.to_string();
+            {
+                let storage = self.get_storage_for_owner_mut(&owner);
+                if let Some(task_mut) = storage.get_task_mut(task_id) {
+                    if task_mut.has_active_time_entry() {
+                        task_mut.pause();
+                    }
                 }
+                storage.save()?;
             }
         }
         Ok(())
@@ -398,6 +522,9 @@ impl App {
 
     pub fn reload(&mut self) -> Result<()> {
         self.storage.load()?;
+        for storage in self.reportee_storages.values_mut() {
+            let _ = storage.load();
+        }
         self.rebuild_visible_task_list();
         Ok(())
     }
@@ -408,8 +535,7 @@ impl App {
             1 => &mut self.input_state.description,
             2 => &mut self.input_state.tags,
             3 => &mut self.input_state.estimate,
-            4 => &mut self.input_state.assignee,
-            5 => &mut self.input_state.note,
+            4 => &mut self.input_state.note,
             _ => return,
         };
         field.push(c);
@@ -421,15 +547,15 @@ impl App {
             1 => &mut self.input_state.description,
             2 => &mut self.input_state.tags,
             3 => &mut self.input_state.estimate,
-            4 => &mut self.input_state.assignee,
-            5 => &mut self.input_state.note,
+            4 => &mut self.input_state.note,
             _ => return,
         };
         field.pop();
     }
 
     pub fn next_field(&mut self) {
-        self.input_state.current_field = (self.input_state.current_field + 1).min(7);
+        // Fields: 0=title, 1=description, 2=tags, 3=estimate, 4=note, 5=Save, 6=Cancel
+        self.input_state.current_field = (self.input_state.current_field + 1).min(6);
     }
 
     pub fn prev_field(&mut self) {
@@ -530,6 +656,9 @@ fn run_app<B: ratatui::backend::Backend>(
                         KeyCode::Char('d') => {
                             app.start_delete_task();
                         }
+                        KeyCode::Char('1') | KeyCode::Char('2') | KeyCode::Right | KeyCode::Left => {
+                            app.switch_tab();
+                        }
                         _ => {}
                     }
                 }
@@ -585,17 +714,17 @@ fn run_app<B: ratatui::backend::Backend>(
                                 } else {
                                     let _ = app.save_edit_task();
                                 }
-                            } else if app.input_state.current_field == 6 {
+                            } else if app.input_state.current_field == 5 {
                                 // Save button selected
                                 if matches!(app.mode, AppMode::AddTask) {
                                     let _ = app.save_new_task();
                                 } else {
                                     let _ = app.save_edit_task();
                                 }
-                            } else if app.input_state.current_field == 7 {
+                            } else if app.input_state.current_field == 6 {
                                 // Cancel button selected
                                 app.cancel_input();
-                            } else if app.input_state.current_field == 5 {
+                            } else if app.input_state.current_field == 4 {
                                 // Regular Enter in note field inserts newline
                                 app.input_char('\n');
                             }

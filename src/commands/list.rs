@@ -8,7 +8,6 @@ use comfy_table::{presets::UTF8_FULL, Cell, Color, ContentArrangement, Table};
 pub fn list_tasks(
     status: Option<StatusFilter>,
     tag: Option<String>,
-    assignee: Option<String>,
 ) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
@@ -34,11 +33,6 @@ pub fn list_tasks(
                     return false;
                 }
             }
-            if let Some(ref a) = assignee {
-                if task.assigned_to.as_deref() != Some(a) {
-                    return false;
-                }
-            }
             true
         })
         .collect();
@@ -52,7 +46,7 @@ pub fn list_tasks(
     table
         .load_preset(UTF8_FULL)
         .set_content_arrangement(ContentArrangement::Dynamic)
-        .set_header(vec!["ID", "Status", "Title", "Tags", "Assignee", "Time", "Created"]);
+        .set_header(vec!["ID", "Status", "Title", "Tags", "Time", "Created"]);
 
     for task in &filtered {
         let status_str = match task.status {
@@ -68,12 +62,6 @@ pub fn list_tasks(
             task.tags.iter().map(|t| format!("#{}", t)).collect::<Vec<_>>().join(" ")
         };
 
-        let assignee_str = task
-            .assigned_to
-            .as_ref()
-            .map(|a| format!("@{}", a))
-            .unwrap_or_default();
-
         let time_str = if task.total_time_seconds > 0 {
             task.get_formatted_total_time()
         } else {
@@ -85,7 +73,6 @@ pub fn list_tasks(
             status_str,
             Cell::new(&task.title),
             Cell::new(tags_str),
-            Cell::new(assignee_str),
             Cell::new(time_str),
             Cell::new(format_datetime(&task.created_at)),
         ]);

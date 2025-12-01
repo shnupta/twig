@@ -10,7 +10,6 @@ pub fn add_task(
     tags: Option<String>,
     estimate: Option<String>,
     eta: Option<String>,
-    assignee: Option<String>,
     description: Option<String>,
 ) -> Result<()> {
     let paths = DataPaths::new()?;
@@ -51,11 +50,6 @@ pub fn add_task(
     // Set ETA
     if let Some(eta_str) = eta {
         task.eta = Some(parse_date(&eta_str)?);
-    }
-
-    // Set assignee
-    if let Some(assignee_name) = assignee {
-        task.assigned_to = Some(assignee_name);
     }
 
     println!("✓ Task created: {} [{}]", task.title, task.short_id());

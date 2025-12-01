@@ -190,6 +190,7 @@ Launch with `twig` or `twig tui`.
 - `j` / `↓` - Move down
 - `k` / `↑` - Move up
 - `Enter` / `Space` / `Tab` - Expand/collapse task (shows/hides subtasks)
+- `1` / `2` - Switch tabs (1 = My Tasks, 2 = Reportees)
 
 **Task Management:**
 - `a` - Add new task (as subtask of selected task)
@@ -269,6 +270,18 @@ All files are human-readable JSON, making them easy to:
 - Version control
 - Inspect or edit manually
 - Sync across machines
+
+### Task Ownership
+
+Tasks are implicitly owned based on which file contains them:
+- **Your tasks**: `tasks.json` (owner = "me")
+- **Reportee tasks**: `reportees/{name}.json` (owner = reportee's name)
+
+In the TUI:
+- **Tab 1 (My Tasks)**: Shows only your tasks from `tasks.json`
+- **Tab 2 (Reportees)**: Shows all reportee tasks grouped together with an `[@name]` prefix
+
+All task operations (start, pause, complete, add subtask, edit, delete) work on the appropriate file based on which task is currently selected.
 
 ## Task Hierarchy
 
@@ -409,7 +422,3 @@ twig list --status in-progress
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues and pull requests.
-
-## License
-
-[Add your license here]
