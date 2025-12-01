@@ -1,5 +1,5 @@
 use crate::models::TaskStatus;
-use crate::tui::app::{App, AppMode, ViewTab};
+use crate::tui::app::{App, AppMode, ViewTab, VisibleItemInfo};
 use crate::utils::format_datetime;
 use chrono::Utc;
 use ratatui::{
@@ -101,102 +101,115 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
-    let tasks = app.get_visible_tasks();
+    let visible_items = app.get_visible_items();
 
-    let items: Vec<ListItem> = tasks
+    let items: Vec<ListItem> = visible_items
         .iter()
         .enumerate()
-        .map(|(i, (task, depth, owner))| {
-            let status_icon = match task.status {
-                TaskStatus::NotStarted => "○",
-                TaskStatus::InProgress => "◐",
-                TaskStatus::Completed => "●",
-                TaskStatus::Cancelled => "✗",
-            };
-
-            let status_color = match task.status {
-                TaskStatus::NotStarted => Color::Gray,
-                TaskStatus::InProgress => Color::Yellow,
-                TaskStatus::Completed => Color::Green,
-                TaskStatus::Cancelled => Color::Red,
-            };
-
-            // Owner indicator (in reportee view)
-            let owner_prefix = if matches!(app.view_tab, ViewTab::AllReportees) && *owner != "me" {
-                format!("[@{}] ", owner)
-            } else {
-                String::new()
-            };
-            
-            // Expand/collapse indicator
-            let expand_indicator = if app.has_children(task.id, owner) {
-                if app.is_expanded(task.id) {
-                    "▼ "
-                } else {
-                    "▶ "
+        .map(|(i, item)| {
+            match item {
+                VisibleItemInfo::ReporteeHeader { name, is_expanded } => {
+                    let expand_indicator = if *is_expanded { "▼" } else { "▶" };
+                    let content = format!("{} 👤 {}", expand_indicator, name);
+                    
+                    let style = if i == app.selected_index {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD)
+                    };
+                    
+                    ListItem::new(Line::from(Span::styled(content, style)))
                 }
-            } else {
-                "  "
-            };
+                VisibleItemInfo::Task { task, depth, owner } => {
+                    let status_icon = match task.status {
+                        TaskStatus::NotStarted => "○",
+                        TaskStatus::InProgress => "◐",
+                        TaskStatus::Completed => "●",
+                        TaskStatus::Cancelled => "✗",
+                    };
 
-            // Time tracking status - make it very visible
-            let (time_info, time_color) = if task.has_active_time_entry() {
-                (format!(" ⏱TRACKING"), Some(Color::Yellow))
-            } else if task.status == TaskStatus::InProgress && task.total_time_seconds > 0 {
-                // In progress but not actively tracking = paused
-                (format!(" ⏸PAUSED"), Some(Color::DarkGray))
-            } else if task.total_time_seconds > 0 {
-                (format!(" [{}]", task.get_formatted_total_time()), None)
-            } else {
-                (String::new(), None)
-            };
+                    let status_color = match task.status {
+                        TaskStatus::NotStarted => Color::Gray,
+                        TaskStatus::InProgress => Color::Yellow,
+                        TaskStatus::Completed => Color::Green,
+                        TaskStatus::Cancelled => Color::Red,
+                    };
+                    
+                    // Expand/collapse indicator
+                    let expand_indicator = if app.has_children(task.id, owner) {
+                        if app.is_expanded(task.id) {
+                            "▼ "
+                        } else {
+                            "▶ "
+                        }
+                    } else {
+                        "  "
+                    };
 
-            // Indentation for tree structure
-            let indent = "  ".repeat(*depth);
+                    // Time tracking status - make it very visible
+                    let (time_info, time_color) = if task.has_active_time_entry() {
+                        (format!(" ⏱TRACKING"), Some(Color::Yellow))
+                    } else if task.status == TaskStatus::InProgress && task.total_time_seconds > 0 {
+                        // In progress but not actively tracking = paused
+                        (format!(" ⏸PAUSED"), Some(Color::DarkGray))
+                    } else if task.total_time_seconds > 0 {
+                        (format!(" [{}]", task.get_formatted_total_time()), None)
+                    } else {
+                        (String::new(), None)
+                    };
 
-            let base_content = format!(
-                "{}{}{}{} {} [{}]",
-                owner_prefix,
-                indent,
-                expand_indicator,
-                status_icon,
-                task.title,
-                task.short_id()
-            );
+                    // Indentation for tree structure
+                    let indent = "  ".repeat(*depth);
 
-            // Build the line with styled time tracking info
-            let mut line_spans = vec![
-                Span::raw(base_content),
-            ];
+                    let base_content = format!(
+                        "{}{}{} {} [{}]",
+                        indent,
+                        expand_indicator,
+                        status_icon,
+                        task.title,
+                        task.short_id()
+                    );
 
-            if !time_info.is_empty() {
-                if let Some(color) = time_color {
-                    line_spans.push(Span::styled(
-                        time_info,
-                        Style::default().fg(color).add_modifier(Modifier::BOLD)
-                    ));
-                } else {
-                    line_spans.push(Span::raw(time_info));
+                    // Build the line with styled time tracking info
+                    let mut line_spans = vec![
+                        Span::raw(base_content),
+                    ];
+
+                    if !time_info.is_empty() {
+                        if let Some(color) = time_color {
+                            line_spans.push(Span::styled(
+                                time_info,
+                                Style::default().fg(color).add_modifier(Modifier::BOLD)
+                            ));
+                        } else {
+                            line_spans.push(Span::raw(time_info));
+                        }
+                    }
+
+                    let style = if i == app.selected_index {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::White)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(status_color)
+                    };
+
+                    ListItem::new(Line::from(line_spans)).style(style)
                 }
             }
-
-            let style = if i == app.selected_index {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::White)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(status_color)
-            };
-
-            ListItem::new(Line::from(line_spans)).style(style)
         })
         .collect();
 
     let list = List::new(items)
         .block(
             Block::default()
-                .title(format!("Task Tree ({}/{})", app.selected_index + 1, tasks.len()))
+                .title(format!("Task Tree ({}/{})", app.selected_index + 1, visible_items.len()))
                 .borders(Borders::ALL),
         );
 

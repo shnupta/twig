@@ -33,6 +33,24 @@ pub enum ViewTab {
     AllReportees,
 }
 
+#[derive(Debug, Clone)]
+pub enum VisibleItem {
+    ReporteeHeader(String), // reportee name
+    Task { id: uuid::Uuid, owner: String },
+}
+
+pub enum VisibleItemInfo<'a> {
+    ReporteeHeader {
+        name: &'a str,
+        is_expanded: bool,
+    },
+    Task {
+        task: &'a Task,
+        depth: usize,
+        owner: &'a str,
+    },
+}
+
 pub struct App {
     pub storage: Storage,
     pub selected_index: usize,
@@ -45,10 +63,11 @@ pub struct App {
     pub show_cancelled: bool,
     pub filter_tag: Option<String>,
     pub expanded_tasks: Vec<uuid::Uuid>,
+    pub expanded_reportees: Vec<String>, // which reportee sections are expanded
     pub should_quit: bool,
     pub input_state: InputState,
     pub editing_task_id: Option<uuid::Uuid>,
-    pub visible_task_list: Vec<(uuid::Uuid, String)>, // (task_id, owner_name) - owner is "me" or reportee name
+    pub visible_task_list: Vec<VisibleItem>,
 }
 
 impl App {
@@ -82,6 +101,7 @@ impl App {
             show_cancelled: false,
             filter_tag: None,
             expanded_tasks: Vec::new(),
+            expanded_reportees: Vec::new(),
             should_quit: false,
             input_state: InputState {
                 title: String::new(),
@@ -129,18 +149,24 @@ impl App {
             ViewTab::AllReportees => {
                 let reportees = self.reportees.clone();
                 for reportee in &reportees {
-                    let root_task_ids: Vec<uuid::Uuid> = if let Some(storage) = self.reportee_storages.get(reportee) {
-                        storage.get_root_tasks()
-                            .into_iter()
-                            .filter(|t| self.should_show_task(t))
-                            .map(|t| t.id)
-                            .collect()
-                    } else {
-                        vec![]
-                    };
+                    // Always add reportee header
+                    self.visible_task_list.push(VisibleItem::ReporteeHeader(reportee.clone()));
                     
-                    for root_id in root_task_ids {
-                        self.add_task_to_visible_list(root_id, reportee.clone());
+                    // If reportee is expanded, show their tasks
+                    if self.expanded_reportees.contains(reportee) {
+                        let root_task_ids: Vec<uuid::Uuid> = if let Some(storage) = self.reportee_storages.get(reportee) {
+                            storage.get_root_tasks()
+                                .into_iter()
+                                .filter(|t| self.should_show_task(t))
+                                .map(|t| t.id)
+                                .collect()
+                        } else {
+                            vec![]
+                        };
+                        
+                        for root_id in root_task_ids {
+                            self.add_task_to_visible_list(root_id, reportee.clone());
+                        }
                     }
                 }
             }
@@ -148,7 +174,10 @@ impl App {
     }
 
     fn add_task_to_visible_list(&mut self, task_id: uuid::Uuid, owner: String) {
-        self.visible_task_list.push((task_id, owner.clone()));
+        self.visible_task_list.push(VisibleItem::Task { 
+            id: task_id, 
+            owner: owner.clone() 
+        });
         
         // If task is expanded, add its children
         if self.expanded_tasks.contains(&task_id) {
@@ -180,13 +209,27 @@ impl App {
         true
     }
 
-    pub fn get_visible_tasks(&self) -> Vec<(&Task, usize, &str)> {
+    pub fn get_visible_items(&self) -> Vec<VisibleItemInfo> {
         let mut result = Vec::new();
-        for (task_id, owner) in &self.visible_task_list {
-            let storage = self.get_storage_for_owner(owner);
-            if let Some(task) = storage.get_task(*task_id) {
-                let depth = self.get_task_depth(task, storage);
-                result.push((task, depth, owner.as_str()));
+        for item in &self.visible_task_list {
+            match item {
+                VisibleItem::ReporteeHeader(name) => {
+                    result.push(VisibleItemInfo::ReporteeHeader {
+                        name: name.as_str(),
+                        is_expanded: self.expanded_reportees.contains(name),
+                    });
+                }
+                VisibleItem::Task { id, owner } => {
+                    let storage = self.get_storage_for_owner(owner);
+                    if let Some(task) = storage.get_task(*id) {
+                        let depth = self.get_task_depth(task, storage);
+                        result.push(VisibleItemInfo::Task {
+                            task,
+                            depth,
+                            owner: owner.as_str(),
+                        });
+                    }
+                }
             }
         }
         result
@@ -206,13 +249,21 @@ impl App {
         depth
     }
 
-    pub fn get_selected_task(&self) -> Option<(&Task, &str)> {
+    pub fn get_selected_item(&self) -> Option<&VisibleItem> {
         if self.selected_index < self.visible_task_list.len() {
-            let (task_id, owner) = &self.visible_task_list[self.selected_index];
-            let storage = self.get_storage_for_owner(owner);
-            storage.get_task(*task_id).map(|t| (t, owner.as_str()))
+            Some(&self.visible_task_list[self.selected_index])
         } else {
             None
+        }
+    }
+
+    pub fn get_selected_task(&self) -> Option<(&Task, &str)> {
+        match self.get_selected_item()? {
+            VisibleItem::Task { id, owner } => {
+                let storage = self.get_storage_for_owner(owner);
+                storage.get_task(*id).map(|t| (t, owner.as_str()))
+            }
+            VisibleItem::ReporteeHeader(_) => None,
         }
     }
 
@@ -254,18 +305,29 @@ impl App {
     }
 
     pub fn toggle_expand(&mut self) {
-        if let Some((task, owner)) = self.get_selected_task() {
-            let id = task.id;
-            if !self.has_children(id, owner) {
-                return; // No children to expand
+        match self.get_selected_item() {
+            Some(VisibleItem::Task { id, owner }) => {
+                if !self.has_children(*id, owner) {
+                    return; // No children to expand
+                }
+                
+                if let Some(pos) = self.expanded_tasks.iter().position(|&x| x == *id) {
+                    self.expanded_tasks.remove(pos);
+                } else {
+                    self.expanded_tasks.push(*id);
+                }
+                self.rebuild_visible_task_list();
             }
-            
-            if let Some(pos) = self.expanded_tasks.iter().position(|&x| x == id) {
-                self.expanded_tasks.remove(pos);
-            } else {
-                self.expanded_tasks.push(id);
+            Some(VisibleItem::ReporteeHeader(name)) => {
+                // Toggle reportee expansion
+                if let Some(pos) = self.expanded_reportees.iter().position(|n| n == name) {
+                    self.expanded_reportees.remove(pos);
+                } else {
+                    self.expanded_reportees.push(name.clone());
+                }
+                self.rebuild_visible_task_list();
             }
-            self.rebuild_visible_task_list();
+            None => {}
         }
     }
 
@@ -289,7 +351,9 @@ impl App {
             current_field: 0,
         };
         // Store whether this should be a subtask or top-level
+        // For reportee headers, this should be None (top-level for that reportee)
         self.editing_task_id = if as_subtask {
+            // Only if we're on an actual task
             self.get_selected_task().map(|(t, _)| t.id)
         } else {
             None
@@ -345,11 +409,22 @@ impl App {
                 // If adding as subtask, use parent's owner
                 if let Some(parent_id) = self.editing_task_id {
                     self.visible_task_list.iter()
-                        .find(|(id, _)| *id == parent_id)
-                        .map(|(_, o)| o.clone())
+                        .find_map(|item| {
+                            if let VisibleItem::Task { id, owner } = item {
+                                if *id == parent_id {
+                                    return Some(owner.clone());
+                                }
+                            }
+                            None
+                        })
                         .unwrap_or_else(|| "me".to_string())
                 } else {
-                    "me".to_string() // Default to me if no parent
+                    // Check if we're on a reportee header
+                    if let Some(VisibleItem::ReporteeHeader(name)) = self.get_selected_item() {
+                        name.clone()
+                    } else {
+                        "me".to_string()
+                    }
                 }
             }
         };
@@ -373,8 +448,14 @@ impl App {
             
             // Get the owner from visible list
             let owner = self.visible_task_list.iter()
-                .find(|(id, _)| *id == task_id)
-                .map(|(_, o)| o.clone())
+                .find_map(|item| {
+                    if let VisibleItem::Task { id, owner } = item {
+                        if *id == task_id {
+                            return Some(owner.clone());
+                        }
+                    }
+                    None
+                })
                 .unwrap_or_else(|| "me".to_string());
             
             {
@@ -421,8 +502,14 @@ impl App {
         if let Some(task_id) = self.editing_task_id {
             // Find owner
             let owner = self.visible_task_list.iter()
-                .find(|(id, _)| *id == task_id)
-                .map(|(_, o)| o.clone())
+                .find_map(|item| {
+                    if let VisibleItem::Task { id, owner } = item {
+                        if *id == task_id {
+                            return Some(owner.clone());
+                        }
+                    }
+                    None
+                })
                 .unwrap_or_else(|| "me".to_string());
             
             self.get_storage_for_owner_mut(&owner).delete_task(task_id)?;
@@ -439,9 +526,13 @@ impl App {
 
     pub fn get_task_by_id_with_owner(&self, id: uuid::Uuid) -> Option<(&Task, &str)> {
         // Try to find in visible list first
-        if let Some((_, owner)) = self.visible_task_list.iter().find(|(tid, _)| *tid == id) {
-            let storage = self.get_storage_for_owner(owner);
-            return storage.get_task(id).map(|t| (t, owner.as_str()));
+        for item in &self.visible_task_list {
+            if let VisibleItem::Task { id: task_id, owner } = item {
+                if *task_id == id {
+                    let storage = self.get_storage_for_owner(owner);
+                    return storage.get_task(id).map(|t| (t, owner.as_str()));
+                }
+            }
         }
         
         // Fallback: search all storages

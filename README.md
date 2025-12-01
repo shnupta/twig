@@ -193,9 +193,11 @@ Launch with `twig` or `twig tui`.
 - `1` / `2` - Switch tabs (1 = My Tasks, 2 = Reportees)
 
 **Task Management:**
-- `a` - Add new task (as subtask of selected task)
+- `a` - Add new task
+  - When on a task: adds as subtask
+  - When on a reportee header (in Reportees tab): adds top-level task for that reportee
 - `A` (Shift+a) - Add new task (as top-level task, not a subtask)
-- `e` - Edit selected task (title, description, tags, estimate, assignee)
+- `e` - Edit selected task (title, description, tags, estimate, notes)
 - `d` - Delete selected task (shows confirmation dialog)
 - `s` - Start selected task (begins time tracking)
 - `c` - Complete selected task (stops time tracking)
@@ -279,7 +281,10 @@ Tasks are implicitly owned based on which file contains them:
 
 In the TUI:
 - **Tab 1 (My Tasks)**: Shows only your tasks from `tasks.json`
-- **Tab 2 (Reportees)**: Shows all reportee tasks grouped together with an `[@name]` prefix
+- **Tab 2 (Reportees)**: Shows all reportees as expandable/collapsible headers
+  - Press `Enter`/`Space`/`Tab` on a reportee name to expand/collapse their tasks
+  - Press `a` on a reportee name to add a new top-level task for them
+  - All task operations work the same within each reportee's section
 
 All task operations (start, pause, complete, add subtask, edit, delete) work on the appropriate file based on which task is currently selected.
 
