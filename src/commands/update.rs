@@ -3,7 +3,6 @@ use crate::storage::{DataPaths, Storage};
 use crate::utils::{format_datetime, parse_date};
 use anyhow::{Context, Result};
 use dialoguer::{theme::ColorfulTheme, Confirm, Select};
-use uuid::Uuid;
 
 fn select_task_mut<'a>(tasks: &'a mut [Task], prompt: &str) -> Result<Option<&'a mut Task>> {
     if tasks.is_empty() {
@@ -33,38 +32,22 @@ fn select_task_mut<'a>(tasks: &'a mut [Task], prompt: &str) -> Result<Option<&'a
     Ok(selection.map(|i| &mut tasks[i]))
 }
 
-fn resolve_task_id(storage: &Storage, id_str: &str) -> Result<Uuid> {
-    if id_str.len() == 8 {
-        storage
-            .find_task_by_short_id(id_str)
-            .map(|t| t.id)
-            .context("Task not found")
-    } else {
-        Uuid::parse_str(id_str).context("Invalid UUID")
-    }
-}
-
-pub fn start_task(id: Option<String>) -> Result<()> {
+pub fn start_task() -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = if let Some(id_str) = id {
-        resolve_task_id(&storage, &id_str)?
-    } else {
-        // Interactive selection
-        let tasks: Vec<Task> = storage
-            .get_all_tasks()
-            .iter()
-            .filter(|t| t.status != TaskStatus::Completed && t.status != TaskStatus::Cancelled)
-            .cloned()
-            .collect();
+    let mut tasks: Vec<Task> = storage
+        .get_all_tasks()
+        .iter()
+        .filter(|t| t.status != TaskStatus::Completed && t.status != TaskStatus::Cancelled)
+        .cloned()
+        .collect();
 
-        if let Some(task) = select_task_mut(&mut tasks.clone(), "Select task to start")? {
-            task.id
-        } else {
-            return Ok(());
-        }
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to start")? {
+        task.id
+    } else {
+        return Ok(());
     };
 
     if let Some(task) = storage.get_task_mut(task_id) {
@@ -78,27 +61,22 @@ pub fn start_task(id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn complete_task(id: Option<String>) -> Result<()> {
+pub fn complete_task() -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = if let Some(id_str) = id {
-        resolve_task_id(&storage, &id_str)?
-    } else {
-        // Interactive selection
-        let tasks: Vec<Task> = storage
-            .get_all_tasks()
-            .iter()
-            .filter(|t| t.status != TaskStatus::Completed && t.status != TaskStatus::Cancelled)
-            .cloned()
-            .collect();
+    let mut tasks: Vec<Task> = storage
+        .get_all_tasks()
+        .iter()
+        .filter(|t| t.status != TaskStatus::Completed && t.status != TaskStatus::Cancelled)
+        .cloned()
+        .collect();
 
-        if let Some(task) = select_task_mut(&mut tasks.clone(), "Select task to complete")? {
-            task.id
-        } else {
-            return Ok(());
-        }
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to complete")? {
+        task.id
+    } else {
+        return Ok(());
     };
 
     if let Some(task) = storage.get_task_mut(task_id) {
@@ -115,27 +93,22 @@ pub fn complete_task(id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn cancel_task(id: Option<String>) -> Result<()> {
+pub fn cancel_task() -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = if let Some(id_str) = id {
-        resolve_task_id(&storage, &id_str)?
-    } else {
-        // Interactive selection
-        let tasks: Vec<Task> = storage
-            .get_all_tasks()
-            .iter()
-            .filter(|t| t.status != TaskStatus::Completed && t.status != TaskStatus::Cancelled)
-            .cloned()
-            .collect();
+    let mut tasks: Vec<Task> = storage
+        .get_all_tasks()
+        .iter()
+        .filter(|t| t.status != TaskStatus::Completed && t.status != TaskStatus::Cancelled)
+        .cloned()
+        .collect();
 
-        if let Some(task) = select_task_mut(&mut tasks.clone(), "Select task to cancel")? {
-            task.id
-        } else {
-            return Ok(());
-        }
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to cancel")? {
+        task.id
+    } else {
+        return Ok(());
     };
 
     if let Some(task) = storage.get_task_mut(task_id) {
@@ -149,32 +122,27 @@ pub fn cancel_task(id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn pause_task(id: Option<String>) -> Result<()> {
+pub fn pause_task() -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = if let Some(id_str) = id {
-        resolve_task_id(&storage, &id_str)?
+    let mut tasks: Vec<Task> = storage
+        .get_all_tasks()
+        .iter()
+        .filter(|t| t.has_active_time_entry())
+        .cloned()
+        .collect();
+
+    if tasks.is_empty() {
+        println!("No tasks with active time tracking.");
+        return Ok(());
+    }
+
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to pause")? {
+        task.id
     } else {
-        // Interactive selection - show only tasks with active time entries
-        let tasks: Vec<Task> = storage
-            .get_all_tasks()
-            .iter()
-            .filter(|t| t.has_active_time_entry())
-            .cloned()
-            .collect();
-
-        if tasks.is_empty() {
-            println!("No tasks with active time tracking.");
-            return Ok(());
-        }
-
-        if let Some(task) = select_task_mut(&mut tasks.clone(), "Select task to pause")? {
-            task.id
-        } else {
-            return Ok(());
-        }
+        return Ok(());
     };
 
     if let Some(task) = storage.get_task_mut(task_id) {
@@ -193,12 +161,19 @@ pub fn pause_task(id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn show_task(id: String) -> Result<()> {
+pub fn show_task() -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = resolve_task_id(&storage, &id)?;
+    let mut tasks: Vec<Task> = storage.get_all_tasks().to_vec();
+
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to view")? {
+        task.id
+    } else {
+        return Ok(());
+    };
+
     let task = storage.get_task(task_id).context("Task not found")?;
 
     println!("\n{}", "=".repeat(60));
@@ -289,7 +264,6 @@ pub fn show_task(id: String) -> Result<()> {
 }
 
 pub fn update_task(
-    id: String,
     title: Option<String>,
     description: Option<String>,
     estimate: Option<String>,
@@ -299,7 +273,13 @@ pub fn update_task(
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = resolve_task_id(&storage, &id)?;
+    let mut tasks: Vec<Task> = storage.get_all_tasks().to_vec();
+
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to update")? {
+        task.id
+    } else {
+        return Ok(());
+    };
 
     if let Some(task) = storage.get_task_mut(task_id) {
         let mut updated = false;
@@ -337,12 +317,19 @@ pub fn update_task(
     Ok(())
 }
 
-pub fn delete_task(id: String) -> Result<()> {
+pub fn delete_task() -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = resolve_task_id(&storage, &id)?;
+    let mut tasks: Vec<Task> = storage.get_all_tasks().to_vec();
+
+    let task_id = if let Some(task) = select_task_mut(&mut tasks, "Select task to delete")? {
+        task.id
+    } else {
+        return Ok(());
+    };
+
     let task = storage.get_task(task_id).context("Task not found")?;
 
     // Check for children
@@ -370,12 +357,18 @@ pub fn delete_task(id: String) -> Result<()> {
     Ok(())
 }
 
-pub fn tag_task(id: String, tags: Vec<String>) -> Result<()> {
+pub fn tag_task(tags: Vec<String>) -> Result<()> {
     let paths = DataPaths::new()?;
     let mut storage = Storage::new(paths.tasks_file().to_string_lossy().to_string());
     storage.load()?;
 
-    let task_id = resolve_task_id(&storage, &id)?;
+    let mut all_tasks: Vec<Task> = storage.get_all_tasks().to_vec();
+
+    let task_id = if let Some(task) = select_task_mut(&mut all_tasks, "Select task to tag")? {
+        task.id
+    } else {
+        return Ok(());
+    };
 
     if let Some(task) = storage.get_task_mut(task_id) {
         for tag in tags {

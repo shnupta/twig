@@ -30,6 +30,14 @@ pub struct InputState {
 pub enum ViewTab {
     MyTasks,
     AllReportees,
+    History,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HistoryPeriod {
+    Day,
+    Week,
+    Month,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +74,9 @@ pub struct App {
     pub input_state: InputState,
     pub editing_task_id: Option<uuid::Uuid>,
     pub visible_task_list: Vec<VisibleItem>,
+    // History view state
+    pub history_period: HistoryPeriod,
+    pub history_date: chrono::NaiveDate,
 }
 
 impl App {
@@ -110,6 +121,8 @@ impl App {
             },
             editing_task_id: None,
             visible_task_list: Vec::new(),
+            history_period: HistoryPeriod::Day,
+            history_date: chrono::Local::now().date_naive(),
         })
     }
 
@@ -117,12 +130,24 @@ impl App {
         self.view_tab = match &self.view_tab {
             ViewTab::MyTasks => {
                 if self.reportees.is_empty() {
-                    ViewTab::MyTasks
+                    ViewTab::History
                 } else {
                     ViewTab::AllReportees
                 }
             }
-            ViewTab::AllReportees => ViewTab::MyTasks,
+            ViewTab::AllReportees => ViewTab::History,
+            ViewTab::History => ViewTab::MyTasks,
+        };
+        self.selected_index = 0;
+        self.rebuild_visible_task_list();
+    }
+
+    pub fn switch_to_tab(&mut self, tab_num: usize) {
+        self.view_tab = match tab_num {
+            1 => ViewTab::MyTasks,
+            2 if !self.reportees.is_empty() => ViewTab::AllReportees,
+            3 => ViewTab::History,
+            _ => return,
         };
         self.selected_index = 0;
         self.rebuild_visible_task_list();
@@ -172,7 +197,105 @@ impl App {
                     }
                 }
             }
+            ViewTab::History => {
+                // Show tasks completed/cancelled in the selected period
+                self.rebuild_history_list();
+            }
         }
+    }
+
+    fn rebuild_history_list(&mut self) {
+        use chrono::{Datelike, Duration};
+
+        let (start_date, end_date) = match self.history_period {
+            HistoryPeriod::Day => (self.history_date, self.history_date),
+            HistoryPeriod::Week => {
+                // Start of week (Monday) to end of week (Sunday)
+                let days_from_monday = self.history_date.weekday().num_days_from_monday();
+                let start = self.history_date - Duration::days(days_from_monday as i64);
+                let end = start + Duration::days(6);
+                (start, end)
+            }
+            HistoryPeriod::Month => {
+                // Start of month to end of month
+                let start = self.history_date.with_day(1).unwrap();
+                let next_month = if self.history_date.month() == 12 {
+                    chrono::NaiveDate::from_ymd_opt(self.history_date.year() + 1, 1, 1).unwrap()
+                } else {
+                    chrono::NaiveDate::from_ymd_opt(
+                        self.history_date.year(),
+                        self.history_date.month() + 1,
+                        1,
+                    )
+                    .unwrap()
+                };
+                let end = next_month - Duration::days(1);
+                (start, end)
+            }
+        };
+
+        // Collect all completed/cancelled tasks from my storage
+        let my_history: Vec<uuid::Uuid> = self
+            .storage
+            .get_all_tasks()
+            .iter()
+            .filter(|t| self.is_task_in_history_range(t, start_date, end_date))
+            .map(|t| t.id)
+            .collect();
+
+        for task_id in my_history {
+            self.visible_task_list.push(VisibleItem::Task {
+                id: task_id,
+                owner: "me".to_string(),
+            });
+        }
+
+        // Also include reportee tasks
+        let reportees = self.reportees.clone();
+        for reportee in &reportees {
+            if let Some(storage) = self.reportee_storages.get(reportee) {
+                let reportee_history: Vec<uuid::Uuid> = storage
+                    .get_all_tasks()
+                    .iter()
+                    .filter(|t| self.is_task_in_history_range(t, start_date, end_date))
+                    .map(|t| t.id)
+                    .collect();
+
+                for task_id in reportee_history {
+                    self.visible_task_list.push(VisibleItem::Task {
+                        id: task_id,
+                        owner: reportee.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn is_task_in_history_range(
+        &self,
+        task: &Task,
+        start: chrono::NaiveDate,
+        end: chrono::NaiveDate,
+    ) -> bool {
+        use chrono::Local;
+
+        // Check if task was completed in range
+        if let Some(completed_at) = task.completed_at {
+            let completed_date = completed_at.with_timezone(&Local).date_naive();
+            if completed_date >= start && completed_date <= end {
+                return true;
+            }
+        }
+
+        // Check if task was cancelled in range
+        if let Some(cancelled_at) = task.cancelled_at {
+            let cancelled_date = cancelled_at.with_timezone(&Local).date_naive();
+            if cancelled_date >= start && cancelled_date <= end {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn add_task_to_visible_list(&mut self, task_id: uuid::Uuid, owner: String) {
@@ -198,12 +321,40 @@ impl App {
     }
 
     fn should_show_task(&self, task: &Task) -> bool {
-        if !self.show_completed && task.status == TaskStatus::Completed {
-            return false;
+        use chrono::Local;
+
+        let today = Local::now().date_naive();
+
+        // For completed tasks: show if completed today, or if show_completed is enabled
+        if task.status == TaskStatus::Completed {
+            if let Some(completed_at) = task.completed_at {
+                let completed_date = completed_at.with_timezone(&Local).date_naive();
+                if completed_date == today {
+                    // Always show tasks completed today
+                } else if !self.show_completed {
+                    // Hide tasks completed on previous days unless filter is on
+                    return false;
+                }
+            } else if !self.show_completed {
+                return false;
+            }
         }
-        if !self.show_cancelled && task.status == TaskStatus::Cancelled {
-            return false;
+
+        // For cancelled tasks: show if cancelled today, or if show_cancelled is enabled
+        if task.status == TaskStatus::Cancelled {
+            if let Some(cancelled_at) = task.cancelled_at {
+                let cancelled_date = cancelled_at.with_timezone(&Local).date_naive();
+                if cancelled_date == today {
+                    // Always show tasks cancelled today
+                } else if !self.show_cancelled {
+                    // Hide tasks cancelled on previous days unless filter is on
+                    return false;
+                }
+            } else if !self.show_cancelled {
+                return false;
+            }
         }
+
         if let Some(ref tag) = self.filter_tag {
             if !task.tags.contains(tag) {
                 return false;
@@ -436,6 +587,7 @@ impl App {
                     }
                 }
             }
+            ViewTab::History => "me".to_string(), // History view doesn't allow adding tasks
         };
 
         let storage = self.get_storage_for_owner_mut(&owner);
@@ -666,6 +818,90 @@ impl App {
     pub fn prev_field(&mut self) {
         self.input_state.current_field = self.input_state.current_field.saturating_sub(1);
     }
+
+    // History navigation
+    pub fn history_next_period(&mut self) {
+        use chrono::{Datelike, Duration};
+
+        self.history_date = match self.history_period {
+            HistoryPeriod::Day => self.history_date + Duration::days(1),
+            HistoryPeriod::Week => self.history_date + Duration::weeks(1),
+            HistoryPeriod::Month => {
+                if self.history_date.month() == 12 {
+                    chrono::NaiveDate::from_ymd_opt(
+                        self.history_date.year() + 1,
+                        1,
+                        self.history_date.day().min(28),
+                    )
+                    .unwrap()
+                } else {
+                    let next_month = self.history_date.month() + 1;
+                    let day = self.history_date.day().min(28); // Safe day for all months
+                    chrono::NaiveDate::from_ymd_opt(self.history_date.year(), next_month, day)
+                        .unwrap()
+                }
+            }
+        };
+        self.rebuild_visible_task_list();
+    }
+
+    pub fn history_prev_period(&mut self) {
+        use chrono::{Datelike, Duration};
+
+        self.history_date = match self.history_period {
+            HistoryPeriod::Day => self.history_date - Duration::days(1),
+            HistoryPeriod::Week => self.history_date - Duration::weeks(1),
+            HistoryPeriod::Month => {
+                if self.history_date.month() == 1 {
+                    chrono::NaiveDate::from_ymd_opt(
+                        self.history_date.year() - 1,
+                        12,
+                        self.history_date.day().min(28),
+                    )
+                    .unwrap()
+                } else {
+                    let prev_month = self.history_date.month() - 1;
+                    let day = self.history_date.day().min(28);
+                    chrono::NaiveDate::from_ymd_opt(self.history_date.year(), prev_month, day)
+                        .unwrap()
+                }
+            }
+        };
+        self.rebuild_visible_task_list();
+    }
+
+    pub fn history_cycle_period(&mut self) {
+        self.history_period = match self.history_period {
+            HistoryPeriod::Day => HistoryPeriod::Week,
+            HistoryPeriod::Week => HistoryPeriod::Month,
+            HistoryPeriod::Month => HistoryPeriod::Day,
+        };
+        self.rebuild_visible_task_list();
+    }
+
+    pub fn history_goto_today(&mut self) {
+        self.history_date = chrono::Local::now().date_naive();
+        self.rebuild_visible_task_list();
+    }
+
+    pub fn get_history_period_label(&self) -> String {
+        use chrono::Datelike;
+
+        match self.history_period {
+            HistoryPeriod::Day => self.history_date.format("%A, %B %d, %Y").to_string(),
+            HistoryPeriod::Week => {
+                let days_from_monday = self.history_date.weekday().num_days_from_monday();
+                let start = self.history_date - chrono::Duration::days(days_from_monday as i64);
+                let end = start + chrono::Duration::days(6);
+                format!(
+                    "Week of {} - {}",
+                    start.format("%b %d"),
+                    end.format("%b %d, %Y")
+                )
+            }
+            HistoryPeriod::Month => self.history_date.format("%B %Y").to_string(),
+        }
+    }
 }
 
 pub fn run_tui() -> Result<()> {
@@ -747,22 +983,61 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
                             app.toggle_expand();
                         }
                         KeyCode::Char('a') => {
-                            app.start_add_task(true); // Add as subtask
+                            if !matches!(app.view_tab, ViewTab::History) {
+                                app.start_add_task(true); // Add as subtask
+                            }
                         }
                         KeyCode::Char('A') => {
-                            app.start_add_task(false); // Add as top-level task
+                            if !matches!(app.view_tab, ViewTab::History) {
+                                app.start_add_task(false); // Add as top-level task
+                            }
                         }
                         KeyCode::Char('e') => {
-                            app.start_edit_task();
+                            if !matches!(app.view_tab, ViewTab::History) {
+                                app.start_edit_task();
+                            }
                         }
                         KeyCode::Char('d') => {
-                            app.start_delete_task();
+                            if !matches!(app.view_tab, ViewTab::History) {
+                                app.start_delete_task();
+                            }
                         }
-                        KeyCode::Char('1')
-                        | KeyCode::Char('2')
-                        | KeyCode::Right
-                        | KeyCode::Left => {
-                            app.switch_tab();
+                        KeyCode::Char('m') => {
+                            if matches!(app.view_tab, ViewTab::History) {
+                                app.history_cycle_period();
+                            }
+                        }
+                        KeyCode::Char('t') => {
+                            if matches!(app.view_tab, ViewTab::History) {
+                                app.history_goto_today();
+                            }
+                        }
+                        KeyCode::Right => {
+                            if matches!(app.view_tab, ViewTab::History) {
+                                app.history_next_period();
+                            } else {
+                                app.switch_tab();
+                            }
+                        }
+                        KeyCode::Left => {
+                            if matches!(app.view_tab, ViewTab::History) {
+                                app.history_prev_period();
+                            } else {
+                                app.switch_tab();
+                            }
+                        }
+                        KeyCode::Char('1') => {
+                            app.switch_to_tab(1);
+                        }
+                        KeyCode::Char('2') => {
+                            if app.reportees.is_empty() {
+                                app.switch_to_tab(3); // Go to History if no reportees
+                            } else {
+                                app.switch_to_tab(2);
+                            }
+                        }
+                        KeyCode::Char('3') => {
+                            app.switch_to_tab(3);
                         }
                         _ => {}
                     }

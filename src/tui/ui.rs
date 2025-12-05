@@ -104,8 +104,26 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
         }
     }
 
+    // History tab
+    let history_key = if app.reportees.is_empty() {
+        "[2]"
+    } else {
+        "[3]"
+    };
+    tab_spans.push(Span::raw(format!("  {} ", history_key)));
+    if matches!(app.view_tab, ViewTab::History) {
+        tab_spans.push(Span::styled(
+            "History",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        ));
+    } else {
+        tab_spans.push(Span::styled("History", Style::default()));
+    }
+
     tab_spans.push(Span::styled(
-        "  (1/2 to switch)",
+        "  (Tab or 1-3)",
         Style::default().fg(Color::DarkGray),
     ));
 
@@ -228,15 +246,38 @@ fn draw_task_list(f: &mut Frame, area: Rect, app: &App) {
         })
         .collect();
 
-    let list = List::new(items).block(
-        Block::default()
-            .title(format!(
-                "Task Tree ({}/{})",
-                app.selected_index + 1,
+    let title = match app.view_tab {
+        ViewTab::History => {
+            let period_label = app.get_history_period_label();
+            let period_type = match app.history_period {
+                crate::tui::app::HistoryPeriod::Day => "Daily",
+                crate::tui::app::HistoryPeriod::Week => "Weekly",
+                crate::tui::app::HistoryPeriod::Month => "Monthly",
+            };
+            format!(
+                "📜 {} History: {} ({}/{})",
+                period_type,
+                period_label,
+                if visible_items.is_empty() {
+                    0
+                } else {
+                    app.selected_index + 1
+                },
                 visible_items.len()
-            ))
-            .borders(Borders::ALL),
-    );
+            )
+        }
+        _ => format!(
+            "Task Tree ({}/{})",
+            if visible_items.is_empty() {
+                0
+            } else {
+                app.selected_index + 1
+            },
+            visible_items.len()
+        ),
+    };
+
+    let list = List::new(items).block(Block::default().title(title).borders(Borders::ALL));
 
     f.render_widget(list, area);
 }
@@ -422,7 +463,14 @@ fn draw_task_details(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let help_text = match app.mode {
         AppMode::Normal => {
-            "j/k:↓↑ | Tab/Enter:Expand | ←/→:Tabs | 1-5:Switch tab | s:Start | c:Complete | x:Cancel | p:Pause | a:Add subtask | A:Add top-level | e:Edit | d:Delete | ?:Help | q:Quit"
+            match app.view_tab {
+                ViewTab::History => {
+                    "j/k:↓↑ | ←/→:Prev/Next period | m:Change period (D/W/M) | t:Go to today | Tab:Switch tab | ?:Help | q:Quit"
+                }
+                _ => {
+                    "j/k:↓↑ | Tab/Enter:Expand | ←/→:Tabs | 1-3:Switch tab | s:Start | c:Complete | x:Cancel | p:Pause | a:Add subtask | A:Add top-level | e:Edit | d:Delete | ?:Help | q:Quit"
+                }
+            }
         }
         AppMode::Help => "Press ? or ESC to close help",
         AppMode::AddTask => "↑/↓/Tab:Navigate | Enter:Activate button or new line | Ctrl+Enter:Save | ESC:Cancel",
@@ -454,8 +502,8 @@ fn draw_help(f: &mut Frame) {
         Line::from("  j / ↓            - Move down"),
         Line::from("  k / ↑            - Move up"),
         Line::from("  Enter/Space/Tab  - Expand/collapse task (shows/hides subtasks)"),
-        Line::from("  ← / →            - Switch tabs (My Tasks / Reportees)"),
-        Line::from("  1-5              - Jump to specific tab"),
+        Line::from("  Tab              - Cycle through tabs"),
+        Line::from("  1-3              - Jump to specific tab (My Tasks / Reportees / History)"),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Task Management",
@@ -476,6 +524,14 @@ fn draw_help(f: &mut Frame) {
         )]),
         Line::from("  h - Toggle show/hide completed"),
         Line::from("  H - Toggle show/hide cancelled"),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            "History View (Tab 3)",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
+        Line::from("  ← / →   - Navigate to prev/next period"),
+        Line::from("  m       - Cycle period type (Day → Week → Month)"),
+        Line::from("  t       - Jump to today"),
         Line::from(""),
         Line::from(vec![Span::styled(
             "Other",

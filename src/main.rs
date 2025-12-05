@@ -29,41 +29,40 @@ fn main() -> Result<()> {
         }) => {
             commands::add_task(title, parent, tags, estimate, eta, description)?;
         }
-        Some(Commands::Start { id }) => {
-            commands::start_task(id)?;
+        Some(Commands::Start) => {
+            commands::start_task()?;
         }
-        Some(Commands::Complete { id }) => {
-            commands::complete_task(id)?;
+        Some(Commands::Complete) => {
+            commands::complete_task()?;
         }
-        Some(Commands::Cancel { id }) => {
-            commands::cancel_task(id)?;
+        Some(Commands::Cancel) => {
+            commands::cancel_task()?;
         }
-        Some(Commands::Pause { id }) => {
-            commands::pause_task(id)?;
+        Some(Commands::Pause) => {
+            commands::pause_task()?;
         }
         Some(Commands::List { status, tag }) => {
             commands::list_tasks(status, tag)?;
         }
-        Some(Commands::Show { id }) => {
-            commands::show_task(id)?;
+        Some(Commands::Show) => {
+            commands::show_task()?;
         }
         Some(Commands::Tree) => {
             commands::show_tree()?;
         }
         Some(Commands::Update {
-            id,
             title,
             description,
             estimate,
             eta,
         }) => {
-            commands::update_task(id, title, description, estimate, eta)?;
+            commands::update_task(title, description, estimate, eta)?;
         }
-        Some(Commands::Delete { id }) => {
-            commands::delete_task(id)?;
+        Some(Commands::Delete) => {
+            commands::delete_task()?;
         }
-        Some(Commands::Tag { id, tags }) => {
-            commands::tag_task(id, tags)?;
+        Some(Commands::Tag { tags }) => {
+            commands::tag_task(tags)?;
         }
         Some(Commands::Reportee { command }) => match command {
             ReporteeCommands::Add { name } => {

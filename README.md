@@ -48,11 +48,7 @@ twig add "Complete project documentation"
 ### Start Working on a Task
 
 ```bash
-# With task ID
-twig start abc12345
-
-# Interactive mode (no ID) - shows selector
-twig start
+twig start  # Interactive selector
 ```
 
 ### View Your Tasks
@@ -78,35 +74,29 @@ twig list --tag urgent
 ```bash
 # Add a new task
 twig add "Task name" [OPTIONS]
-  --parent <ID>              # Parent task ID
+  --parent <ID>              # Parent task short ID
   --tags <tag1,tag2>         # Comma-separated tags
   --estimate <1h|2d|3w|2m>   # Effort estimate
   --eta <YYYY-MM-DD>         # Completion deadline
-  --assignee <name>          # Assign to someone
   --description <text>       # Task description
 
-# Start a task (starts time tracking)
-twig start [ID]              # Interactive if no ID
+# All task commands use interactive selectors
+twig start                   # Start a task (begins time tracking)
+twig complete                # Complete a task
+twig cancel                  # Cancel a task
+twig pause                   # Pause time tracking
+twig show                    # Show task details
+twig delete                  # Delete a task
 
-# Complete a task
-twig complete [ID]           # Interactive if no ID
-
-# Cancel a task
-twig cancel [ID]             # Interactive if no ID
-
-# Pause time tracking
-twig pause [ID]              # Interactive if no ID
-
-# Update task details
-twig update <ID> [OPTIONS]
+# Update task details (select interactively, then provide options)
+twig update [OPTIONS]
   --title <text>
   --description <text>
   --estimate <1h|2d|3w|2m>
   --eta <YYYY-MM-DD>
-  --assignee <name>
 
 # Add tags to a task
-twig tag <ID> <tag1> <tag2> ...
+twig tag <tag1> <tag2> ...
 
 # Show task details
 twig show <ID>
@@ -192,7 +182,13 @@ Launch with `twig` or `twig tui`.
 - `j` / `↓` - Move down
 - `k` / `↑` - Move up
 - `Enter` / `Space` / `Tab` - Expand/collapse task (shows/hides subtasks)
-- `1` / `2` - Switch tabs (1 = My Tasks, 2 = Reportees)
+- `1` / `2` / `3` - Switch tabs (1 = My Tasks, 2 = Reportees, 3 = History)
+
+**History View (Tab 3):**
+- `←` / `→` - Navigate to previous/next period
+- `m` - Cycle period type (Day → Week → Month)
+- `t` - Jump to today
+- Browse completed/cancelled tasks by day, week, or month
 
 **Task Management:**
 - `a` - Add new task
@@ -206,9 +202,11 @@ Launch with `twig` or `twig tui`.
 - `x` - Cancel selected task
 - `p` - Pause time tracking (keeps status as "in progress")
 
-**Filters:**
-- `h` - Toggle show/hide completed tasks
-- `H` - Toggle show/hide cancelled tasks
+**Filters & Visibility:**
+- `h` - Toggle show/hide completed tasks (from previous days)
+- `H` - Toggle show/hide cancelled tasks (from previous days)
+
+*Note: Tasks completed or cancelled **today** always remain visible in the main task list. From the next day onwards, they move to the History tab. Use `h`/`H` to also show older completed/cancelled tasks in the main view.*
 
 **Other:**
 - `r` - Reload tasks from disk
@@ -229,7 +227,6 @@ When adding or editing tasks in the TUI, you can:
 - Add **description** for detailed information
 - Add **tags** (comma-separated) for organization
 - Set **estimate** (1h, 2d, 3w, 2m format)
-- Assign to a **team member**
 - Edit **notes** (multiline text field for detailed task notes)
 
 ### Tree View Indicators
@@ -337,7 +334,7 @@ twig start abc12345
 
 # Finish the task (stops time tracking)
 twig complete abc12345
-# Output: 
+# Output:
 # ✓ Completed task: Fix bug [abc12345]
 #   Total time: 2.3h
 ```
@@ -419,13 +416,8 @@ twig list --status in-progress
 
 ## Tips
 
-1. **Use short IDs**: You only need the first 8 characters of a task ID
-2. **Interactive mode**: Omit IDs on start/complete/cancel commands for a picker
-3. **Tag everything**: Tags make filtering much easier later
-4. **Regular reports**: Generate daily reports to track your productivity
-5. **Estimate accurately**: Review stats regularly to improve estimation skills
-6. **TUI for overview**: Use the TUI when you need to browse, CLI for speed
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues and pull requests.
+1. **Interactive mode**: Omit IDs on start/complete/cancel commands for a picker
+2. **Tag everything**: Tags make filtering much easier later
+3. **Regular reports**: Generate daily reports to track your productivity
+4. **Estimate accurately**: Review stats regularly to improve estimation skills
+5. **TUI for overview**: Use the TUI when you need to browse, CLI for speed

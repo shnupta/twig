@@ -37,29 +37,17 @@ pub enum Commands {
         description: Option<String>,
     },
 
-    /// Start working on a task
-    Start {
-        /// Task ID (short or full UUID). If not provided, shows interactive selector
-        id: Option<String>,
-    },
+    /// Start working on a task (interactive selector)
+    Start,
 
-    /// Complete a task
-    Complete {
-        /// Task ID (short or full UUID). If not provided, shows interactive selector
-        id: Option<String>,
-    },
+    /// Complete a task (interactive selector)
+    Complete,
 
-    /// Cancel a task
-    Cancel {
-        /// Task ID (short or full UUID). If not provided, shows interactive selector
-        id: Option<String>,
-    },
+    /// Cancel a task (interactive selector)
+    Cancel,
 
-    /// Pause active time tracking on a task
-    Pause {
-        /// Task ID (short or full UUID). If not provided, shows interactive selector
-        id: Option<String>,
-    },
+    /// Pause active time tracking on a task (interactive selector)
+    Pause,
 
     /// List tasks
     List {
@@ -72,20 +60,14 @@ pub enum Commands {
         tag: Option<String>,
     },
 
-    /// Show detailed information about a task
-    Show {
-        /// Task ID (short or full UUID)
-        id: String,
-    },
+    /// Show detailed information about a task (interactive selector)
+    Show,
 
     /// Display task tree
     Tree,
 
-    /// Update task fields
+    /// Update task fields (interactive selector)
     Update {
-        /// Task ID (short or full UUID)
-        id: String,
-
         /// New title
         #[arg(long)]
         title: Option<String>,
@@ -103,17 +85,11 @@ pub enum Commands {
         eta: Option<String>,
     },
 
-    /// Delete a task
-    Delete {
-        /// Task ID (short or full UUID)
-        id: String,
-    },
+    /// Delete a task (interactive selector)
+    Delete,
 
-    /// Add tags to a task
+    /// Add tags to a task (interactive selector)
     Tag {
-        /// Task ID (short or full UUID)
-        id: String,
-
         /// Tags to add
         tags: Vec<String>,
     },
