@@ -105,7 +105,7 @@ impl App {
             view_tab: ViewTab::MyTasks,
             reportees,
             reportee_storages,
-            show_completed: true,
+            show_completed: false, // Only show tasks completed today by default
             show_cancelled: false,
             filter_tag: None,
             expanded_tasks: Vec::new(),
@@ -325,33 +325,33 @@ impl App {
 
         let today = Local::now().date_naive();
 
-        // For completed tasks: show if completed today, or if show_completed is enabled
+        // For completed tasks: only show if 'h' is pressed AND completed today
         if task.status == TaskStatus::Completed {
+            if !self.show_completed {
+                // Hide all completed tasks by default
+                return false;
+            }
+            // When show_completed is on, only show today's completed tasks
             if let Some(completed_at) = task.completed_at {
                 let completed_date = completed_at.with_timezone(&Local).date_naive();
-                if completed_date == today {
-                    // Always show tasks completed today
-                } else if !self.show_completed {
-                    // Hide tasks completed on previous days unless filter is on
+                if completed_date != today {
                     return false;
                 }
-            } else if !self.show_completed {
-                return false;
             }
         }
 
-        // For cancelled tasks: show if cancelled today, or if show_cancelled is enabled
+        // For cancelled tasks: only show if 'H' is pressed AND cancelled today
         if task.status == TaskStatus::Cancelled {
+            if !self.show_cancelled {
+                // Hide all cancelled tasks by default
+                return false;
+            }
+            // When show_cancelled is on, only show today's cancelled tasks
             if let Some(cancelled_at) = task.cancelled_at {
                 let cancelled_date = cancelled_at.with_timezone(&Local).date_naive();
-                if cancelled_date == today {
-                    // Always show tasks cancelled today
-                } else if !self.show_cancelled {
-                    // Hide tasks cancelled on previous days unless filter is on
+                if cancelled_date != today {
                     return false;
                 }
-            } else if !self.show_cancelled {
-                return false;
             }
         }
 
